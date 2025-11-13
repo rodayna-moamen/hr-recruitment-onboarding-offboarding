@@ -1,0 +1,27 @@
+{
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "mongoose": "^8.19.3"
+  },
+  "name": "hr-recruitment-onboarding-offboarding",
+  "version": "1.0.0",
+  "description": "This repository contains the **Recruitment, Onboarding, and Offboarding** subsystem of the HR Management System project.",
+  "main": "testconnection.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rodayna-moamen/hr-recruitment-onboarding-offboarding.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rodayna-moamen/hr-recruitment-onboarding-offboarding/issues"
+  },
+  "homepage": "https://github.com/rodayna-moamen/hr-recruitment-onboarding-offboarding#readme"
+}
