@@ -60,19 +60,35 @@ For Milestone 1, only the **design and planning** are required (no full implemen
 
 ## 3. Repository Structure (Planned)
 
-```text
-/backend
-  └─ src
-/frontend
-  └─ src
-/docs
-  ├─ recruitment-flow.png
-  ├─ onboarding-flow.png
-  └─ offboarding-flow.png
-README.md
-DATA_MODEL.md
-API_DESIGN.md
-SYSTEM_FLOW.md
+/hr-recruitment-onboarding-offboarding
+│
+├─ backend
+│   ├─ src
+│   │   ├─ app.js                   # Main Express app with CRUD endpoints
+│   │   └─ utils
+│   │       ├─ dummyData.js         # Dummy data helper
+│   │       └─ testDummyData.js     # Test dummy data helper
+│   │
+│   ├─ server.js                    # Server entry point
+│   ├─ config/                      # Empty folder for future configuration
+│   ├─ controllers/                 # Empty folder for future controllers
+│   ├─ middleware/                  # Empty folder for future middleware
+│   ├─ models/                      # Empty folder for future Mongoose models
+│   └─ routes/                      # Empty folder for future route files
+│
+├─ frontend                         # Empty for now (Next.js later)
+│   └─ src
+│
+├─ docs                             # Empty for now
+│
+├─ .env                             # Environment variables (Mongo URI, etc.)
+├─ node_modules/                    # Installed dependencies
+├─ package.json
+├─ package-lock.json
+├─ README.md
+├─ DATA_MODEL.md
+├─ API_DESIGN.md
+└─ SYSTEM_FLOW.md
 
 ## 4. API Endpoints (Available)
 
