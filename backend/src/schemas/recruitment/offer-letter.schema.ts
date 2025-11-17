@@ -59,6 +59,10 @@ export const OfferLetterSchema = new Schema(
       onboardingChecklistId: String,
     },
     expiresAt: Date,
+    financialApprovalId: { type: String, ref: 'FinancialApproval' }, // REC-027
+    offerTemplateId: { type: String, ref: 'OfferTemplate' },
+    candidateSignatureId: { type: String, ref: 'CandidateSignature' },
+    offerAcceptanceStatus: { type: String, enum: ['pending','accepted','rejected'], default: 'pending' },
   },
   { _id: false },
 );

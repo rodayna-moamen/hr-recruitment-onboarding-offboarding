@@ -26,6 +26,9 @@ export const AccessProvisioningSchema = new Schema(
       team: { type: String, enum: ['it', 'security'] },
       contact: String,
     },
+    newHireProfileId: { type: String, ref: 'EmployeeProfile' }, // Employee Profile (New Hire Record)
+    sysAdminConfigId: { type: String, ref: 'SystemAdminConfig' }, // System Admin Configuration
+    onboardingChecklistId: { type: String, ref: 'OnboardingChecklist' }, // None (Onboarding Checklist Data)
   },
   { _id: false },
 );

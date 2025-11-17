@@ -20,6 +20,7 @@ export const ClearanceSignOffSchema = new Schema(
         resolved: { type: Boolean, default: false },
       },
     ],
+    clearanceStatusUpdateId: { type: String, ref: 'ClearanceStatusUpdate' }, // For department clearance status updates
   },
   { _id: false },
 );

@@ -22,6 +22,9 @@ export const OffboardingChecklistSchema = new Schema(
     assetReturnPlanId: String,
     clearanceSignOffId: String,
     finalSettlementId: String,
+    configurationTemplateId: { type: String, ref: 'OffboardingConfigTemplate' }, // None (Configuration)
+    clearanceStatusUpdateIds: [{ type: String, ref: 'ClearanceStatusUpdate' }], // Clearance Status Updates (from Depts)
+    employeeProfileId: { type: String, ref: 'EmployeeProfile' }, // For resignation reason / employee link
   },
   { _id: false },
 );

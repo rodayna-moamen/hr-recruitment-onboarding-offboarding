@@ -21,6 +21,7 @@ export const JobPostingSchema = new Schema(
       keywords: [{ type: String }],
       metaDescription: String,
     },
+    orgStructureJobId: { type: String, ref: 'OrganizationalJob' }, // Reference to Organizational Structure/Job
   },
   { _id: false },
 );

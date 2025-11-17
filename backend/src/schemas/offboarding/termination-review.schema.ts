@@ -22,6 +22,9 @@ export const TerminationReviewSchema = new Schema(
       decidedAt: Date,
       notes: String,
     },
+    pmWarningId: { type: String, ref: 'PerformanceWarning' }, // Performance Management (Warnings/Low Scores)
+    configurationTemplateId: { type: String, ref: 'OffboardingConfigTemplate' }, // None (Configuration)
+    employeeProfileId: { type: String, ref: 'EmployeeProfile' }, // For inactive status
   },
   { _id: false },
 );

@@ -14,6 +14,9 @@ export const OffboardingNotificationSchema = new Schema(
     sentAt: Date,
     triggeredBy: String,
     status: { type: String, enum: ['queued', 'sent', 'failed'], default: 'queued' },
+    employeeProfileId: { type: String, ref: 'EmployeeProfile' },
+    leavesBalanceId: { type: String, ref: 'LeavesBalance' }, // Leaves Module (Balance)
+    employeeBenefitsId: { type: String, ref: 'EmployeeBenefits' }, // Employee Profile (Benefits)
   },
   { _id: false },
 );

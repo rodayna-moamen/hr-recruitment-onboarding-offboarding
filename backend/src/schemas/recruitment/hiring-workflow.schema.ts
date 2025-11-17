@@ -28,6 +28,11 @@ export const HiringWorkflowSchema = new Schema(
       trackTimePerStage: { type: Boolean, default: true },
       trackConversionRates: { type: Boolean, default: true },
     },
+    templateId: { type: String, ref: 'HiringProcessTemplate' }, // Hiring process template reference
+    evaluationCriteriaId: { type: String, ref: 'EvaluationCriteria' }, // REC-015 ref
+    timeManagementEventId: { type: String, ref: 'TimeManagementEvent' }, // Calendar/time mgmt external ref
+    interviewPanelFeedbackIds: [{ type: String, ref: 'InterviewFeedback' }],
+    interviewPanelMemberIds: [{ type: String, ref: 'PanelMember' }],
   },
   { _id: false },
 );

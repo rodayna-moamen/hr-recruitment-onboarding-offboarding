@@ -49,6 +49,9 @@ export const CandidateApplicationSchema = new Schema(
     },
     communicationLogIds: [{ type: String }],
     analyticsId: String,
+    cvs: [{ type: String, ref: 'CandidateDocument' }], // Array of CV/document references
+    statusTrackingId: { type: String, ref: 'StatusTracking' }, // External status tracking reference
+    referralSource: { type: String, ref: 'ReferralSource' }, // Referral source info reference
   },
   { _id: false },
 );
