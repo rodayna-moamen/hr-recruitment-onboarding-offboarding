@@ -1,36 +1,36 @@
 // Import schemas for future use or registration in modules
-import { JobPostingSchema } from './schemas/recruitment/job-posting.schema';
-import { CandidateApplicationSchema } from './schemas/recruitment/candidate-application.schema';
-import { ReferralTagSchema } from './schemas/recruitment/referral-tag.schema';
-import { OfferLetterSchema } from './schemas/recruitment/offer-letter.schema';
-import { PreboardingTaskSchema } from './schemas/recruitment/preboarding-task.schema';
-import { AssessmentTemplateSchema } from './schemas/recruitment/assessment-template.schema';
-import { InterviewScheduleSchema } from './schemas/recruitment/interview-schedule.schema';
-import { InterviewFeedbackSchema } from './schemas/recruitment/interview-feedback.schema';
-import { CandidateProfileSchema } from './schemas/recruitment/candidate-profile.schema';
-import { CandidateConsentSchema } from './schemas/recruitment/candidate-consent.schema';
-import { RecruitmentAnalyticsSchema } from './schemas/recruitment/recruitment-analytics.schema';
-import { CommunicationLogSchema } from './schemas/recruitment/communication-log.schema';
-import { HiringWorkflowSchema } from './schemas/recruitment/hiring-workflow.schema';
-import { JobTemplateSchema } from './schemas/recruitment/job-template.schema';
+import { JobPostingSchema } from './recruitment/schemas/job-posting.schema';
+import { CandidateApplicationSchema } from './recruitment/schemas/candidate-application.schema';
+import { ReferralTagSchema } from './recruitment/schemas/referral-tag.schema';
+import { OfferLetterSchema } from './recruitment/schemas/offer-letter.schema';
+import { PreboardingTaskSchema } from './recruitment/schemas/preboarding-task.schema';
+import { AssessmentTemplateSchema } from './recruitment/schemas/assessment-template.schema';
+import { InterviewScheduleSchema } from './recruitment/schemas/interview-schedule.schema';
+import { InterviewFeedbackSchema } from './recruitment/schemas/interview-feedback.schema';
+import { CandidateProfileSchema } from './recruitment/schemas/candidate-profile.schema';
+import { CandidateConsentSchema } from './recruitment/schemas/candidate-consent.schema';
+import { RecruitmentAnalyticsSchema } from './recruitment/schemas/recruitment-analytics.schema';
+import { CommunicationLogSchema } from './recruitment/schemas/communication-log.schema';
+import { HiringWorkflowSchema } from './recruitment/schemas/hiring-workflow.schema';
+import { JobTemplateSchema } from './recruitment/schemas/job-template.schema';
 
-import { OnboardingChecklistSchema } from './schemas/onboarding/onboarding-checklist.schema';
-import { OnboardingTrackerSchema } from './schemas/onboarding/onboarding-tracker.schema';
-import { ContractSubmissionSchema } from './schemas/onboarding/contract-submission.schema';
-import { SigningBonusSchema } from './schemas/onboarding/signing-bonus.schema';
-import { PayrollInitiationSchema } from './schemas/onboarding/payroll-initiation.schema';
-import { AssetReservationSchema } from './schemas/onboarding/asset-reservation.schema';
-import { AccessProvisioningSchema } from './schemas/onboarding/access-provisioning.schema';
+import { OnboardingChecklistSchema } from './onboarding/schemas/onboarding-checklist.schema';
+import { OnboardingTrackerSchema } from './onboarding/schemas/onboarding-tracker.schema';
+import { ContractSubmissionSchema } from './onboarding/schemas/contract-submission.schema';
+import { SigningBonusSchema } from './onboarding/schemas/signing-bonus.schema';
+import { PayrollInitiationSchema } from './onboarding/schemas/payroll-initiation.schema';
+import { AssetReservationSchema } from './onboarding/schemas/asset-reservation.schema';
+import { AccessProvisioningSchema } from './onboarding/schemas/access-provisioning.schema';
 
-import { OffboardingChecklistSchema } from './schemas/offboarding/offboarding-checklist.schema';
-import { OffboardingNotificationSchema } from './schemas/offboarding/offboarding-notification.schema';
-import { ClearanceSignOffSchema } from './schemas/offboarding/clearance-signoff.schema';
-import { AccessRevocationSchema } from './schemas/offboarding/access-revocation.schema';
-import { ResignationRequestSchema } from './schemas/offboarding/resignation-request.schema';
-import { TerminationReviewSchema } from './schemas/offboarding/termination-review.schema';
+import { OffboardingChecklistSchema } from './offboarding/schemas/offboarding-checklist.schema';
+import { OffboardingNotificationSchema } from './offboarding/schemas/offboarding-notification.schema';
+import { ClearanceSignOffSchema } from './offboarding/schemas/clearance-signoff.schema';
+import { AccessRevocationSchema } from './offboarding/schemas/access-revocation.schema';
+import { ResignationRequestSchema } from './offboarding/schemas/resignation-request.schema';
+import { TerminationReviewSchema } from './offboarding/schemas/termination-review.schema';
 
-import { ReminderSchema } from './schemas/shared/reminder.schema';
-import { DocumentUploadSchema } from './schemas/shared/document-upload.schema';
+import { ReminderSchema } from './shared/reminder.schema';
+import { DocumentUploadSchema } from './shared/document-upload.schema';
 
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';

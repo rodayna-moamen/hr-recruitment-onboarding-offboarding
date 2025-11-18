@@ -3,12 +3,12 @@ import { OffboardingController } from './offboarding.controller';
 import { OffboardingService } from './offboarding.service';
 
 // Import offboarding schemas
-import { OffboardingChecklistSchema } from '../../schemas/offboarding/offboarding-checklist.schema';
-import { OffboardingNotificationSchema } from '../../schemas/offboarding/offboarding-notification.schema';
-import { ClearanceSignOffSchema } from '../../schemas/offboarding/clearance-signoff.schema';
-import { AccessRevocationSchema } from '../../schemas/offboarding/access-revocation.schema';
-import { ResignationRequestSchema } from '../../schemas/offboarding/resignation-request.schema';
-import { TerminationReviewSchema } from '../../schemas/offboarding/termination-review.schema';
+import { OffboardingChecklistSchema } from '../schemas/offboarding-checklist.schema';
+import { OffboardingNotificationSchema } from '../schemas/offboarding-notification.schema';
+import { ClearanceSignOffSchema } from '../schemas/clearance-signoff.schema';
+import { AccessRevocationSchema } from '../schemas/access-revocation.schema';
+import { ResignationRequestSchema } from '../schemas/resignation-request.schema';
+import { TerminationReviewSchema } from '../schemas/termination-review.schema';
 
 @Module({
   controllers: [OffboardingController],
