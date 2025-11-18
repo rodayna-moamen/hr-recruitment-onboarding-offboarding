@@ -4,8 +4,8 @@ export const InterviewFeedbackSchema = new Schema(
   {
     feedbackId: { type: String, required: true },
     interviewId: { type: String, required: true },
-    reviewerId: { type: String, required: true },
-    reviewerName: String,
+    reviewerIds: [{ type: String, required: true }], // Array to support multiple reviewers
+    reviewerNames: [{ type: String }], // Array to support multiple reviewer names
     submittedAt: { type: Date, default: Date.now },
     ratings: [
       {
