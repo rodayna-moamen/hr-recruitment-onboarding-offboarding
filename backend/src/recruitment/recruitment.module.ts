@@ -14,6 +14,7 @@ import { Contract,ContractSchema } from './models/contract.schema';
 import { Document,DocumentSchema } from './models/document.schema';
 import { TerminationRequest,TerminationRequestSchema } from './models/termination-request.schema';
 import { ClearanceChecklist,ClearanceChecklistSchema } from './models/clearance-checklist.schema';
+import { Onboarding,OnboardingSchema } from './models/onboarding.schema';
 import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
 @Module({
   imports:[MongooseModule.forFeature([
@@ -29,6 +30,7 @@ import { EmployeeProfileModule } from '../employee-profile/employee-profile.modu
       { name: Document.name, schema: DocumentSchema },
       { name: TerminationRequest.name, schema: TerminationRequestSchema },
       { name: ClearanceChecklist.name, schema: ClearanceChecklistSchema },
+      { name: Onboarding.name, schema: OnboardingSchema },
     ]),EmployeeProfileModule
   ],
   controllers: [RecruitmentController],

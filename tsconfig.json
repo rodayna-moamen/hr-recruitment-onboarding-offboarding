@@ -19,6 +19,14 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
-  }
+    "noFallthroughCasesInSwitch": false,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["backend/src/*"]
+    }
+  },
+  "include": ["backend/src/**/*", "**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "rootDir": "."
 }

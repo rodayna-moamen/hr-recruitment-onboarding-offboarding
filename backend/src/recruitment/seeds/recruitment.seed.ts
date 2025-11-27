@@ -1,10 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { getModelToken } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Types } from 'mongoose';
+import { Model, Types } from 'mongoose';
 
-// Import all recruitment models
 import { JobTemplate, JobTemplateDocument } from '../models/job-template.schema';
 import { JobRequisition, JobRequisitionDocument } from '../models/job-requisition.schema';
 import { Application, ApplicationDocument } from '../models/application.schema';
@@ -19,7 +17,6 @@ import { Referral, ReferralDocument } from '../models/referral.schema';
 import { TerminationRequest, TerminationRequestDocument } from '../models/termination-request.schema';
 import { ClearanceChecklist, ClearanceChecklistDocument } from '../models/clearance-checklist.schema';
 
-// Import enums
 import { ApplicationStage } from '../enums/application-stage.enum';
 import { ApplicationStatus } from '../enums/application-status.enum';
 import { InterviewMethod } from '../enums/interview-method.enum';
@@ -33,71 +30,58 @@ import { TerminationInitiation } from '../enums/termination-initiation.enum';
 import { TerminationStatus } from '../enums/termination-status.enum';
 
 /**
- * Recruitment Module Seeding Script
- * 
- * This script demonstrates inter-module integration by:
- * 1. Creating recruitment data with references to external modules (User/Employee)
- * 2. Establishing relationships between recruitment entities
- * 3. Creating a complete recruitment workflow from job posting to onboarding
- * 
- * Note: This uses mock ObjectIds for User references since User model is in EmployeeProfileModule
- * In a real scenario, these would reference actual users from the employee profile module
+ * Recruitment Module Seeding Script (ASCII-safe)
+ *
+ * Covers end-to-end flows for milestone 2:
+ * - Job templates and requisitions (published/draft/external)
+ * - Applications across stages with histories and interviews
+ * - Offers (accepted/pending), contracts, onboarding trigger
+ * - Referrals and status history (rejection + notification template marker)
+ * - Compliance placeholders (consent doc) without schema changes
+ * - Termination and clearance checklist to close the lifecycle
  */
-
 async function seedRecruitment() {
-  console.log('🌱 Starting Recruitment Module Seeding...\n');
+  console.log('Starting Recruitment Module Seeding...');
 
   const app = await NestFactory.createApplicationContext(AppModule);
 
   try {
-    // Get all model instances
-    const jobTemplateModel = app.get<Model<JobTemplateDocument>>(
-      getModelToken(JobTemplate.name),
-    );
-    const jobRequisitionModel = app.get<Model<JobRequisitionDocument>>(
-      getModelToken(JobRequisition.name),
-    );
-    const applicationModel = app.get<Model<ApplicationDocument>>(
-      getModelToken(Application.name),
-    );
-    const interviewModel = app.get<Model<InterviewDocument>>(
-      getModelToken(Interview.name),
-    );
+    const jobTemplateModel = app.get<Model<JobTemplateDocument>>(getModelToken(JobTemplate.name));
+    const jobRequisitionModel = app.get<Model<JobRequisitionDocument>>(getModelToken(JobRequisition.name));
+    const applicationModel = app.get<Model<ApplicationDocument>>(getModelToken(Application.name));
+    const interviewModel = app.get<Model<InterviewDocument>>(getModelToken(Interview.name));
     const offerModel = app.get<Model<OfferDocument>>(getModelToken(Offer.name));
-    const onboardingModel = app.get<Model<OnboardingDocument>>(
-      getModelToken(Onboarding.name),
-    );
-    const documentModel = app.get<Model<DocumentDocument>>(
-      getModelToken(Document.name),
-    );
-    const contractModel = app.get<Model<ContractDocument>>(
-      getModelToken(Contract.name),
-    );
+    const onboardingModel = app.get<Model<OnboardingDocument>>(getModelToken(Onboarding.name));
+    const documentModel = app.get<Model<DocumentDocument>>(getModelToken(Document.name));
+    const contractModel = app.get<Model<ContractDocument>>(getModelToken(Contract.name));
     const applicationHistoryModel = app.get<Model<ApplicationStatusHistoryDocument>>(
       getModelToken(ApplicationStatusHistory.name),
     );
-    const assessmentResultModel = app.get<Model<AssessmentResultDocument>>(
-      getModelToken(AssessmentResult.name),
-    );
-    const referralModel = app.get<Model<ReferralDocument>>(
-      getModelToken(Referral.name),
-    );
+    const assessmentResultModel = app.get<Model<AssessmentResultDocument>>(getModelToken(AssessmentResult.name));
+    const referralModel = app.get<Model<ReferralDocument>>(getModelToken(Referral.name));
     const terminationRequestModel = app.get<Model<TerminationRequestDocument>>(
       getModelToken(TerminationRequest.name),
     );
-    const clearanceChecklistModel = app.get<Model<ClearanceChecklistDocument>>(
-      getModelToken(ClearanceChecklist.name),
-    );
+    const clearanceChecklistModel = app.get<Model<ClearanceChecklistDocument>>(getModelToken(ClearanceChecklist.name));
 
-    // Mock User IDs (in real scenario, these would come from EmployeeProfileModule)
-    const mockHiringManagerId = new Types.ObjectId();
-    const mockHrId = new Types.ObjectId();
-    const mockInterviewerId = new Types.ObjectId();
-    const mockEmployeeId = new Types.ObjectId();
-    const mockCandidateId = new Types.ObjectId(); // Placeholder for Candidate collection
+    const users = {
+      hiringManager: new Types.ObjectId(),
+      hr: new Types.ObjectId(),
+      interviewer: new Types.ObjectId(),
+      financeApprover: new Types.ObjectId(),
+      employee: new Types.ObjectId(),
+      candidateUserPrimary: new Types.ObjectId(),
+      candidateUserRejected: new Types.ObjectId(),
+      candidateUserReferral: new Types.ObjectId(),
+    };
 
-    // Clear existing data
-    console.log('🧹 Clearing existing recruitment data...');
+    const candidates = {
+      primary: new Types.ObjectId(),
+      rejected: new Types.ObjectId(),
+      referral: new Types.ObjectId(),
+    };
+
+    console.log('Clearing existing recruitment data...');
     await Promise.all([
       jobTemplateModel.deleteMany({}),
       jobRequisitionModel.deleteMany({}),
@@ -113,197 +97,300 @@ async function seedRecruitment() {
       terminationRequestModel.deleteMany({}),
       clearanceChecklistModel.deleteMany({}),
     ]);
-    console.log('✅ Existing data cleared\n');
+    console.log('Existing data cleared.');
 
-    // 1. Create Job Templates
-    console.log('📝 Creating Job Templates...');
-    const jobTemplate = await jobTemplateModel.create({
+    const jobTemplateEngineering = await jobTemplateModel.create({
       title: 'Senior Software Engineer',
       department: 'Engineering',
-      qualifications: ['Bachelor\'s in Computer Science', '5+ years experience'],
+      qualifications: ["Bachelor's in Computer Science", '5+ years experience'],
       skills: ['TypeScript', 'Node.js', 'React', 'MongoDB'],
-      description: 'We are looking for an experienced software engineer to join our team.',
+      description: 'Employer-branded template. Stages: screening -> department interview -> HR interview -> offer.',
     });
-    console.log(`✅ Created Job Template: ${jobTemplate.title} (ID: ${jobTemplate._id})\n`);
 
-    // 2. Create Job Requisition
-    console.log('📋 Creating Job Requisitions...');
-    const jobRequisition = await jobRequisitionModel.create({
+    const jobTemplateHR = await jobTemplateModel.create({
+      title: 'HR Business Partner',
+      department: 'People',
+      qualifications: ['HR certification', '3+ years HRBP experience'],
+      skills: ['Employee Relations', 'Analytics', 'Communication'],
+      description: 'Internal template. Stages: screening -> HR interview -> offer (with approvals).',
+    });
+
+    const jobTemplateMarketing = await jobTemplateModel.create({
+      title: 'Marketing Manager',
+      department: 'Marketing',
+      qualifications: ['Brand management background', 'Portfolio of campaigns'],
+      skills: ['Content', 'SEO', 'Campaign Analytics'],
+      description: 'External careers page ready. Stages: screening -> panel interview -> offer.',
+    });
+
+    const jobRequisitionPublished = await jobRequisitionModel.create({
       requisitionId: 'REQ-2024-001',
-      templateId: jobTemplate._id,
+      templateId: jobTemplateEngineering._id,
       openings: 2,
       location: 'Remote',
-      hiringManagerId: mockHiringManagerId,
+      hiringManagerId: users.hiringManager,
       publishStatus: 'published',
       postingDate: new Date('2024-01-15'),
       expiryDate: new Date('2024-03-15'),
     });
-    console.log(`✅ Created Job Requisition: ${jobRequisition.requisitionId} (ID: ${jobRequisition._id})\n`);
 
-    // 3. Create Application
-    console.log('📨 Creating Applications...');
-    const application = await applicationModel.create({
-      candidateId: mockCandidateId,
-      requisitionId: jobRequisition._id,
-      assignedHr: mockHrId,
+    const jobRequisitionDraft = await jobRequisitionModel.create({
+      requisitionId: 'REQ-2024-002',
+      templateId: jobTemplateHR._id,
+      openings: 1,
+      location: 'Cairo HQ',
+      hiringManagerId: users.hiringManager,
+      publishStatus: 'draft',
+      postingDate: undefined,
+      expiryDate: new Date('2024-04-01'),
+    });
+
+    const jobRequisitionExternal = await jobRequisitionModel.create({
+      requisitionId: 'REQ-2024-003',
+      templateId: jobTemplateMarketing._id,
+      openings: 1,
+      location: 'Riyadh (External Careers Page)',
+      hiringManagerId: users.hiringManager,
+      publishStatus: 'published',
+      postingDate: new Date('2024-02-01'),
+      expiryDate: new Date('2024-04-01'),
+    });
+
+    const applicationPrimary = await applicationModel.create({
+      candidateId: candidates.primary,
+      requisitionId: jobRequisitionPublished._id,
+      assignedHr: users.hr,
       currentStage: ApplicationStage.SCREENING,
       status: ApplicationStatus.IN_PROCESS,
     });
-    console.log(`✅ Created Application (ID: ${application._id})\n`);
 
-    // 4. Create Application Status History
-    console.log('📊 Creating Application Status History...');
-    await applicationHistoryModel.create({
-      applicationId: application._id,
-      oldStage: ApplicationStage.SCREENING,
-      newStage: ApplicationStage.DEPARTMENT_INTERVIEW,
-      oldStatus: ApplicationStatus.SUBMITTED,
-      newStatus: ApplicationStatus.IN_PROCESS,
-      changedBy: mockHrId,
+    const applicationRejected = await applicationModel.create({
+      candidateId: candidates.rejected,
+      requisitionId: jobRequisitionPublished._id,
+      assignedHr: users.hr,
+      currentStage: ApplicationStage.SCREENING,
+      status: ApplicationStatus.SUBMITTED,
     });
-    console.log('✅ Created Application Status History\n');
 
-    // 5. Create Interview
-    console.log('🗓️ Creating Interviews...');
-    const interview = await interviewModel.create({
-      applicationId: application._id,
+    const applicationReferral = await applicationModel.create({
+      candidateId: candidates.referral,
+      requisitionId: jobRequisitionExternal._id,
+      assignedHr: users.hr,
+      currentStage: ApplicationStage.HR_INTERVIEW,
+      status: ApplicationStatus.IN_PROCESS,
+    });
+
+    const applicationHistories = await applicationHistoryModel.create([
+      {
+        applicationId: applicationPrimary._id,
+        oldStage: ApplicationStage.SCREENING,
+        newStage: ApplicationStage.DEPARTMENT_INTERVIEW,
+        oldStatus: ApplicationStatus.SUBMITTED,
+        newStatus: ApplicationStatus.IN_PROCESS,
+        changedBy: users.hr,
+      },
+      {
+        applicationId: applicationPrimary._id,
+        oldStage: ApplicationStage.DEPARTMENT_INTERVIEW,
+        newStage: ApplicationStage.HR_INTERVIEW,
+        oldStatus: ApplicationStatus.IN_PROCESS,
+        newStatus: ApplicationStatus.IN_PROCESS,
+        changedBy: users.hiringManager,
+      },
+      {
+        applicationId: applicationRejected._id,
+        oldStage: ApplicationStage.SCREENING,
+        newStage: ApplicationStage.SCREENING,
+        oldStatus: ApplicationStatus.SUBMITTED,
+        newStatus: ApplicationStatus.REJECTED,
+        changedBy: users.hr,
+      },
+      {
+        applicationId: applicationReferral._id,
+        oldStage: ApplicationStage.SCREENING,
+        newStage: ApplicationStage.HR_INTERVIEW,
+        oldStatus: ApplicationStatus.SUBMITTED,
+        newStatus: ApplicationStatus.IN_PROCESS,
+        changedBy: users.hr,
+      },
+    ]);
+    console.log(`Application histories created: ${applicationHistories.length}`);
+
+    const interviewPrimary = await interviewModel.create({
+      applicationId: applicationPrimary._id,
       stage: ApplicationStage.DEPARTMENT_INTERVIEW,
       scheduledDate: new Date('2024-02-01T10:00:00Z'),
       method: InterviewMethod.VIDEO,
-      panel: [mockInterviewerId, mockHiringManagerId],
+      panel: [users.interviewer, users.hiringManager],
       videoLink: 'https://meet.example.com/interview-001',
       status: InterviewStatus.COMPLETED,
     });
-    console.log(`✅ Created Interview (ID: ${interview._id})\n`);
 
-    // 6. Create Assessment Result
-    console.log('⭐ Creating Assessment Results...');
-    const assessmentResult = await assessmentResultModel.create({
-      interviewId: interview._id,
-      interviewerId: mockInterviewerId,
+    const interviewReferral = await interviewModel.create({
+      applicationId: applicationReferral._id,
+      stage: ApplicationStage.HR_INTERVIEW,
+      scheduledDate: new Date('2024-02-07T09:00:00Z'),
+      method: InterviewMethod.ONSITE,
+      panel: [users.hiringManager],
+      calendarEventId: 'CAL-REF-001',
+      status: InterviewStatus.SCHEDULED,
+      candidateFeedback: 'Pre-panel brief shared with candidate (communication template).',
+    });
+
+    const assessmentPrimary = await assessmentResultModel.create({
+      interviewId: interviewPrimary._id,
+      interviewerId: users.interviewer,
       score: 85,
       comments: 'Strong technical skills, good communication.',
     });
-    console.log(`✅ Created Assessment Result (ID: ${assessmentResult._id})\n`);
 
-    // Update interview with feedback
-    await interviewModel.updateOne(
-      { _id: interview._id },
-      { feedbackId: assessmentResult._id },
-    );
+    const assessmentReferral = await assessmentResultModel.create({
+      interviewId: interviewReferral._id,
+      interviewerId: users.hiringManager,
+      score: 90,
+      comments: 'Referral candidate with strong campaign portfolio.',
+    });
 
-    // 7. Create Offer
-    console.log('💰 Creating Offers...');
-    const offer = await offerModel.create({
-      applicationId: application._id,
-      candidateId: mockCandidateId,
-      hrEmployeeId: mockHrId,
+    await interviewModel.updateOne({ _id: interviewPrimary._id }, { feedbackId: assessmentPrimary._id });
+    await interviewModel.updateOne({ _id: interviewReferral._id }, { feedbackId: assessmentReferral._id });
+
+    const offerAccepted = await offerModel.create({
+      applicationId: applicationPrimary._id,
+      candidateId: candidates.primary,
+      hrEmployeeId: users.hr,
       grossSalary: 120000,
       signingBonus: 5000,
       benefits: ['Health Insurance', '401k', 'Remote Work'],
       conditions: 'Standard employment terms',
       insurances: 'Full health and dental coverage',
-      content: 'We are pleased to offer you the position of Senior Software Engineer...',
+      content: 'Offer letter for Senior Software Engineer.',
       role: 'Senior Software Engineer',
       deadline: new Date('2024-02-15'),
       applicantResponse: OfferResponseStatus.ACCEPTED,
       approvers: [
         {
-          employeeId: mockHiringManagerId,
+          employeeId: users.hiringManager,
           role: 'Hiring Manager',
           status: ApprovalStatus.APPROVED,
           actionDate: new Date('2024-02-05'),
           comment: 'Approved',
+        },
+        {
+          employeeId: users.financeApprover,
+          role: 'Finance',
+          status: ApprovalStatus.APPROVED,
+          actionDate: new Date('2024-02-06'),
+          comment: 'Budget confirmed',
         },
       ],
       finalStatus: OfferFinalStatus.APPROVED,
       candidateSignedAt: new Date('2024-02-10'),
       hrSignedAt: new Date('2024-02-10'),
     });
-    console.log(`✅ Created Offer (ID: ${offer._id})\n`);
 
-    // 8. Create Document
-    console.log('📄 Creating Documents...');
-    const document = await documentModel.create({
-      ownerId: mockEmployeeId,
+    const offerPending = await offerModel.create({
+      applicationId: applicationReferral._id,
+      candidateId: candidates.referral,
+      hrEmployeeId: users.hr,
+      grossSalary: 95000,
+      benefits: ['Medical', 'Annual Bonus'],
+      conditions: 'Pending candidate response',
+      content: 'Offer letter for Marketing Manager.',
+      role: 'Marketing Manager',
+      deadline: new Date('2024-03-05'),
+      applicantResponse: OfferResponseStatus.PENDING,
+      approvers: [
+        {
+          employeeId: users.hiringManager,
+          role: 'Hiring Manager',
+          status: ApprovalStatus.PENDING,
+          actionDate: undefined,
+          comment: 'Awaiting panel feedback',
+        },
+      ],
+      finalStatus: OfferFinalStatus.PENDING,
+    });
+
+    const contractDocument = await documentModel.create({
+      ownerId: users.employee,
       type: DocumentType.CONTRACT,
       filePath: '/documents/contracts/contract-001.pdf',
+      uploadedAt: new Date('2024-02-10'),
     });
-    console.log(`✅ Created Document (ID: ${document._id})\n`);
 
-    // 9. Create Contract
-    console.log('📜 Creating Contracts...');
-    await contractModel.create({
-      offerId: offer._id,
+    await documentModel.create({
+      ownerId: users.candidateUserRejected,
+      type: DocumentType.CV,
+      filePath: '/documents/cv/candidate-rejected.pdf',
+      uploadedAt: new Date('2024-01-20'),
+    });
+
+    await documentModel.create({
+      ownerId: users.candidateUserReferral,
+      type: DocumentType.ID,
+      filePath: '/documents/consents/referral-candidate-consent.txt',
+      uploadedAt: new Date('2024-02-01'),
+    });
+
+    const contract = await contractModel.create({
+      offerId: offerAccepted._id,
       acceptanceDate: new Date('2024-02-10'),
       grossSalary: 120000,
       signingBonus: 5000,
       role: 'Senior Software Engineer',
       benefits: ['Health Insurance', '401k', 'Remote Work'],
-      documentId: document._id,
+      documentId: contractDocument._id,
       employeeSignedAt: new Date('2024-02-10'),
       employerSignedAt: new Date('2024-02-10'),
     });
-    console.log('✅ Created Contract\n');
 
-    // 10. Create Onboarding (Integration with Employee Profile Module)
-    console.log('👋 Creating Onboarding Tasks...');
     await onboardingModel.create({
-      employeeId: mockEmployeeId, // References User from EmployeeProfileModule
+      employeeId: users.employee,
       tasks: [
         {
-          name: 'Upload ID Document',
+          name: 'Pre-boarding paperwork',
           department: 'HR',
           status: OnboardingTaskStatus.COMPLETED,
           deadline: new Date('2024-02-20'),
           completedAt: new Date('2024-02-18'),
-          documentId: document._id,
-          notes: 'ID uploaded successfully',
+          documentId: contractDocument._id,
+          notes: 'All compliance forms signed',
         },
         {
           name: 'Set up Email Account',
           department: 'IT',
           status: OnboardingTaskStatus.IN_PROGRESS,
           deadline: new Date('2024-02-25'),
-          notes: 'In progress',
+          notes: 'Provisioning requested',
         },
         {
           name: 'Complete Payroll Forms',
           department: 'HR',
           status: OnboardingTaskStatus.PENDING,
           deadline: new Date('2024-02-28'),
-          notes: 'Pending',
+          notes: 'Pending employee submission',
         },
       ],
       completed: false,
     });
-    console.log('✅ Created Onboarding Tasks\n');
 
-    // 11. Create Referral
-    console.log('🤝 Creating Referrals...');
     await referralModel.create({
-      referringEmployeeId: mockEmployeeId,
-      candidateId: mockCandidateId,
-      role: 'Senior Software Engineer',
+      referringEmployeeId: users.employee,
+      candidateId: candidates.referral,
+      role: 'Marketing Manager',
       level: 'Senior',
     });
-    console.log('✅ Created Referral\n');
 
-    // 12. Create Termination Request
-    console.log('🚪 Creating Termination Requests...');
     const terminationRequest = await terminationRequestModel.create({
-      employeeId: mockEmployeeId,
+      employeeId: users.employee,
       initiator: TerminationInitiation.EMPLOYEE,
       reason: 'Resignation - Personal reasons',
       employeeComments: 'Moving to a new city',
       status: TerminationStatus.UNDER_REVIEW,
       terminationDate: new Date('2024-04-30'),
-      contractId: new Types.ObjectId(), // Placeholder
+      contractId: contract._id,
     });
-    console.log(`✅ Created Termination Request (ID: ${terminationRequest._id})\n`);
 
-    // 13. Create Clearance Checklist
-    console.log('✅ Creating Clearance Checklists...');
     await clearanceChecklistModel.create({
       terminationId: terminationRequest._id,
       items: [
@@ -333,41 +420,43 @@ async function seedRecruitment() {
       ],
       cardReturned: false,
     });
-    console.log('✅ Created Clearance Checklist\n');
 
-    console.log('✅ Recruitment Module Seeding Completed Successfully!\n');
-    console.log('📊 Summary:');
-    console.log(`   - Job Templates: 1`);
-    console.log(`   - Job Requisitions: 1`);
-    console.log(`   - Applications: 1`);
-    console.log(`   - Interviews: 1`);
-    console.log(`   - Offers: 1`);
-    console.log(`   - Onboarding Records: 1`);
-    console.log(`   - Documents: 1`);
-    console.log(`   - Contracts: 1`);
-    console.log(`   - Terminations: 1`);
-    console.log('\n💡 This demonstrates:');
-    console.log('   - Complete recruitment workflow from job posting to onboarding');
-    console.log('   - Inter-module integration (references to User/Employee from EmployeeProfileModule)');
-    console.log('   - Relationships between all recruitment entities');
-    console.log('   - Full lifecycle: Application → Interview → Offer → Contract → Onboarding → Termination\n');
-
+    console.log('Recruitment Module Seeding Completed Successfully!');
+    console.log('Summary:');
+    console.log('  - Job Templates: 3');
+    console.log('  - Job Requisitions: 3');
+    console.log('  - Applications: 3');
+    console.log(`  - Application Histories: ${applicationHistories.length}`);
+    console.log('  - Interviews: 2');
+    console.log('  - Assessment Results: 2');
+    console.log('  - Offers: 2 (1 accepted, 1 pending)');
+    console.log('  - Contracts: 1');
+    console.log('  - Documents: 3 (cv, consent placeholder, contract)');
+    console.log('  - Onboarding Records: 1');
+    console.log('  - Referrals: 1');
+    console.log('  - Terminations: 1');
+    console.log('  - Clearance Checklists: 1');
+    console.log('This demonstrates:');
+    console.log('  - Complete recruitment workflow from job posting to onboarding and termination');
+    console.log('  - Published vs draft vs external posting requisitions');
+    console.log('  - Application status history, interviews, and referral priority coverage');
+    console.log('  - Offer approvals, acceptance, and onboarding trigger');
+    console.log('  - Consent placeholder via document record (schema unchanged)');
+    console.log('  - Offboarding via termination and clearance checklist');
   } catch (error) {
-    console.error('❌ Error during seeding:', error);
+    console.error('Error during seeding:', error);
     throw error;
   } finally {
     await app.close();
   }
 }
 
-// Run the seeding
 seedRecruitment()
   .then(() => {
-    console.log('✨ Seeding process finished');
+    console.log('Seeding process finished');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('💥 Seeding failed:', error);
+    console.error('Seeding failed:', error);
     process.exit(1);
   });
-
