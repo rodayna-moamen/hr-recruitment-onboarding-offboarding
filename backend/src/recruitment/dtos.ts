@@ -1,2 +1,0 @@
-// DTOs for recruitment module
-

@@ -98,3 +98,4 @@ createCollectionRoutes('onboarding-tasks', 'onboardingTasks', 'onboardingId');
 createCollectionRoutes('offboarding-tasks', 'offboardingTasks', 'offboardingId');
 
 module.exports = app;
+
