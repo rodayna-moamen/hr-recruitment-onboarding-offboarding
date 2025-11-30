@@ -32,6 +32,8 @@ import { OfferResponseStatus } from './enums/offer-response-status.enum';
 import { OfferFinalStatus } from './enums/offer-final-status.enum';
 import { ApprovalStatus } from './enums/approval-status.enum';
 
+// Throughout this service, wherever a dependency or data from Employee Profile, Organization Structure, Leaves, Payroll, or other subsystem is required to fulfill a requirement, a TODO comment is included to mark that integration point for future microservice/event/HTTP/API call wiring.
+
 @Injectable()
 export class RecruitmentService {
   private readonly logger = new Logger(RecruitmentService.name);
@@ -734,9 +736,12 @@ export class RecruitmentService {
     this.logger.log(`Interview invite sent to ${recipient} (BR19)`);
   }
 
+  // ==========================================
+  // ONBOARDING TRIGGER (REC-029)
+  // ==========================================
   private async triggerOnboarding(offer: Offer): Promise<void> {
-    // BR26(c): Trigger onboarding module (REC-029)
-    // In real implementation, would emit event or call onboarding service
+    // TODO (Onboarding/EmployeeProfile): Send onboarding trigger to onboarding subsystem, pass Employee Profile & offer details
+    // TODO (Organization Structure): Cross-check org structure positions/jobs/department via Org Structure service or DB when integrated
     this.logger.log(`Onboarding triggered for candidate ${offer.candidateId} (BR26c)`);
   }
 
