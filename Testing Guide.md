@@ -11,51 +11,51 @@
 ## 📊 All 29 Endpoints Checklist
 
 ### Root (1 endpoint)
-- [ ] 1. GET `/` - API Information
+- [x] 1. GET `/` - API Information
 
 ### Job Templates (5 endpoints)
-- [ ] 2. POST `/templates` - Create template
-- [ ] 3. GET `/templates` - List all templates
-- [ ] 4. GET `/templates/:id` - Get template by ID
-- [ ] 5. PUT `/templates/:id` - Update template
-- [ ] 6. DELETE `/templates/:id` - Delete template
+- [x] 2. POST `/templates` - Create template
+- [x] 3. GET `/templates` - List all templates
+- [x] 4. GET `/templates/:id` - Get template by ID
+- [x] 5. PUT `/templates/:id` - Update template
+- [x] 6. DELETE `/templates/:id` - Delete template
 
 ### Job Requisitions (5 endpoints)
-- [ ] 7. POST `/jobs` - Create requisition
-- [ ] 8. GET `/jobs` - List all requisitions
-- [ ] 9. GET `/jobs/:id` - Get requisition by ID
-- [ ] 10. POST `/jobs/:id/publish` - Publish job
-- [ ] 11. PUT `/jobs/:id` - Update requisition
+- [x] 7. POST `/jobs` - Create requisition
+- [x] 8. GET `/jobs` - List all requisitions
+- [x] 9. GET `/jobs/:id` - Get requisition by ID
+- [x] 10. POST `/jobs/:id/publish` - Publish job
+- [x] 11. PUT `/jobs/:id` - Update requisition
 
 ### Applications (6 endpoints)
-- [ ] 12. POST `/applications` - Create application
-- [ ] 13. GET `/applications` - List all applications
-- [ ] 14. GET `/applications/:id` - Get application by ID
-- [ ] 15. GET `/applications/:id/status` - Get status & history
-- [ ] 16. POST `/applications/:id/status` - Update status
-- [ ] 17. POST `/applications/:id/reject` - Send rejection
+- [x] 12. POST `/applications` - Create application
+- [x] 13. GET `/applications` - List all applications
+- [x] 14. GET `/applications/:id` - Get application by ID
+- [x] 15. GET `/applications/:id/status` - Get status & history
+- [x] 16. POST `/applications/:id/status` - Update status
+- [x] 17. POST `/applications/:id/reject` - Send rejection
 
 ### Interviews (4 endpoints)
-- [ ] 18. POST `/interviews` - Schedule interview
-- [ ] 19. GET `/interviews?applicationId=xxx` - Get interviews
-- [ ] 20. GET `/interviews/:id` - Get interview by ID
-- [ ] 21. POST `/interviews/:id/feedback` - Submit feedback
+- [x] 18. POST `/interviews` - Schedule interview
+- [x] 19. GET `/interviews?applicationId=xxx` - Get interviews
+- [x] 20. GET `/interviews/:id` - Get interview by ID
+- [x] 21. POST `/interviews/:id/feedback` - Submit feedback
 
 ### Referrals (2 endpoints)
-- [ ] 22. POST `/referrals` - Create referral
-- [ ] 23. GET `/referrals?candidateId=xxx` - Get referrals
+- [x] 22. POST `/referrals` - Create referral
+- [x] 23. GET `/referrals?candidateId=xxx` - Get referrals
 
 ### Offers (4 endpoints)
-- [ ] 24. POST `/offers` - Create offer
-- [ ] 25. GET `/offers/:id` - Get offer by ID
-- [ ] 26. POST `/offers/:id/approve` - Approve offer
-- [ ] 27. POST `/offers/:id/accept` - Accept offer
+- [x] 24. POST `/offers` - Create offer
+- [x] 25. GET `/offers/:id` - Get offer by ID
+- [x] 26. POST `/offers/:id/approve` - Approve offer
+- [x] 27. POST `/offers/:id/accept` - Accept offer
 
 ### Analytics (1 endpoint)
-- [ ] 28. GET `/analytics/recruitment` - Get analytics
+- [x] 28. GET `/analytics/recruitment` - Get analytics
 
 ### Consent (1 endpoint)
-- [ ] 29. POST `/consent` - Save consent
+- [x] 29. POST `/consent` - Save consent
 
 ---
 
@@ -183,6 +183,7 @@ Content-Type: application/json
 **Body:**
 ```json
 {
+  "requisitionId": "REQ-2024-001",
   "templateId": "PASTE_TEMPLATE_ID_FROM_STEP_2",
   "openings": 2,
   "location": "Remote",
@@ -190,7 +191,12 @@ Content-Type: application/json
 }
 ```
 
-**Save the `_id` from response!**
+**Important Notes:**
+- `requisitionId` is **required** - use a unique string like "REQ-2024-001"
+- `templateId` must be a valid MongoDB ObjectId (24 hex characters) from step 2
+- `hiringManagerId` must be a valid MongoDB ObjectId
+
+**Important:** Save the `_id` field (MongoDB ObjectId) from the response - you'll need this for creating applications in step 12. Do NOT use the `requisitionId` string field.
 
 ---
 
@@ -261,11 +267,16 @@ Content-Type: application/json
 ```json
 {
   "candidateId": "507f1f77bcf86cd799439012",
-  "requisitionId": "PASTE_REQUISITION_ID_FROM_STEP_7",
-  "consentGiven": true,
-  "consentDate": "2024-11-30T00:00:00.000Z"
+  "requisitionId": "PASTE_REQUISITION_OBJECT_ID_FROM_STEP_7",
+  "consentGiven": true
 }
 ```
+
+**Important Notes:**
+- `requisitionId` must be the MongoDB ObjectId (`_id` field) from step 7, NOT the string `requisitionId` field
+- `consentGiven` is required (must be `true` for BR28)
+- `consentDate` is NOT a field - remove it from the request
+- `candidateId` must be a valid MongoDB ObjectId
 
 **Save the `_id` from response!**
 
@@ -318,12 +329,26 @@ Content-Type: application/json
 ```json
 {
   "status": "screening",
-  "stage": "screening"
+  "currentStage": "screening"
 }
 ```
 
-**Status values:** `submitted`, `screening`, `interview`, `offer`, `hired`, `rejected`  
-**Stage values:** `screening`, `interview`, `offer`, `onboarding`
+**Important Notes:**
+- Use `currentStage` (not `stage`) - valid values: `screening`, `department_interview`, `hr_interview`, `offer`
+- `status` - valid values: `submitted`, `in_process`, `offer`, `hired`, `rejected`
+- Both fields are optional - you can update just one or both
+- `comment` and `reason` are also optional fields you can include
+
+**Example - Update to interview stage:**
+```json
+{
+  "status": "in_process",
+  "currentStage": "department_interview"
+}
+```
+
+**Status values:** `submitted`, `in_process`, `offer`, `hired`, `rejected` 
+**Stage values:** `screening`, `department_interview`, `hr_interview`, `offer`
 
 ---
 
@@ -338,10 +363,17 @@ Content-Type: application/json
 **Body:**
 ```json
 {
-  "template": "Thank you for your interest. Unfortunately...",
+  "subject": "Application Status Update",
+  "body": "Thank you for your interest in our company. Unfortunately, we have decided to move forward with other candidates at this time.",
   "reason": "Does not meet qualifications"
 }
 ```
+
+**Important Notes:**
+- `subject` is **required** - Email subject line
+- `body` is **required** - Email body content
+- `reason` is **required** - Reason for rejection
+- All three fields are required strings
 
 ---
 
@@ -357,15 +389,23 @@ Content-Type: application/json
 ```json
 {
   "applicationId": "PASTE_APPLICATION_ID_FROM_STEP_12",
+  "stage": "department_interview",
   "scheduledDate": "2024-12-05T10:00:00.000Z",
   "method": "video",
-  "location": "Zoom Meeting Room A",
-  "interviewerIds": ["507f1f77bcf86cd799439013"],
-  "notes": "Technical interview focusing on system design"
+  "panel": ["507f1f77bcf86cd799439013"],
+  "videoLink": "https://zoom.us/j/123456789"
 }
 ```
 
-**Method values:** `in_person`, `video`, `phone`  
+**Important Notes:**
+- `applicationId` is **required** - MongoDB ObjectId from step 12
+- `stage` is **required** - Must be: `screening`, `department_interview`, `hr_interview`, or `offer`
+- `scheduledDate` is **required** - ISO 8601 date format
+- `method` is **required** - Must be: `onsite`, `video`, or `phone`
+- `panel` is **required** - Array of MongoDB ObjectIds (interviewer IDs), must have at least 1
+- `videoLink` is **optional** - For video interviews
+- `calendarEventId` is **optional** - Calendar event ID if integrated
+
 **Save the `_id` from response!**
 
 ---
@@ -401,7 +441,6 @@ Content-Type: application/json
 **Body:**
 ```json
 {
-  "interviewId": "PASTE_INTERVIEW_ID_HERE",
   "interviewerId": "507f1f77bcf86cd799439013",
   "technicalScore": 8,
   "communicationScore": 9,
@@ -411,6 +450,13 @@ Content-Type: application/json
   "recommendation": "hire"
 }
 ```
+
+**Important Notes:**
+- `interviewId` is **NOT needed in the body** - it comes from the URL parameter (`:id`)
+- `interviewerId` is **required** - MongoDB ObjectId of the interviewer
+- All scores must be between 1-10
+- `recommendation` is optional - values: `hire`, `reject`, `maybe`
+- `comments` is optional
 
 **Scores:** Must be between 1-10  
 **Recommendation:** `hire`, `reject`, `maybe`
@@ -497,11 +543,18 @@ Content-Type: application/json
 **Body:**
 ```json
 {
-  "approverId": "507f1f77bcf86cd799439015",
+  "employeeId": "507f1f77bcf86cd799439015",
   "role": "Hiring Manager",
+  "status": "approved",
   "comment": "Approved - Budget confirmed and role aligned with team needs"
 }
 ```
+
+**Important Notes:**
+- Use `employeeId` (not `approverId`) - must be a valid MongoDB ObjectId
+- `status` is **required** - must be one of: `"approved"`, `"rejected"`, or `"pending"`
+- `role` is required - e.g., "Hiring Manager", "Financial Approver", "HR Manager"
+- `comment` is optional
 
 ---
 
@@ -532,15 +585,25 @@ Content-Type: application/json
 GET http://localhost:3000/analytics/recruitment?startDate=2024-01-01&endDate=2024-12-31
 ```
 
+**Important Notes:**
+- **URL Format:** Make sure there's no trailing slash before `/analytics` - use `/analytics/recruitment` (not `//analytics/recruitment`)
+- **Authentication Required:** This endpoint requires JWT authentication (Bearer token)
+- All query parameters are optional - you can call it without any parameters to get all analytics
+
 **Query Parameters (all optional):**
-- `startDate`: Start date (ISO format)
-- `endDate`: End date (ISO format)
-- `requisitionId`: Filter by requisition ID
-- `status`: Filter by status (`submitted`, `in_process`, `offer`, `hired`, `rejected`)
+- `startDate`: Start date (ISO format, e.g., `2024-01-01`)
+- `endDate`: End date (ISO format, e.g., `2024-12-31`)
+- `requisitionId`: Filter by requisition ID (MongoDB ObjectId)
+- `status`: Filter by status - one of: `submitted`, `in_process`, `offer`, `hired`, `rejected`
 
 **Example with all parameters:**
 ```
 GET http://localhost:3000/analytics/recruitment?startDate=2024-01-01&endDate=2024-12-31&requisitionId=507f1f77bcf86cd799439011&status=hired
+```
+
+**Example - Minimal request (no parameters):**
+```
+GET http://localhost:3000/analytics/recruitment
 ```
 
 ---
@@ -599,20 +662,19 @@ Use any 24-character hex string:
 
 **Application Status:**
 - `submitted`
-- `screening`
-- `interview`
+- `in_process`
 - `offer`
 - `hired`
 - `rejected`
 
 **Application Stage:**
 - `screening`
-- `interview`
+- `department_interview`
+- `hr_interview`
 - `offer`
-- `onboarding`
 
 **Interview Method:**
-- `in_person`
+- `onsite`
 - `video`
 - `phone`
 

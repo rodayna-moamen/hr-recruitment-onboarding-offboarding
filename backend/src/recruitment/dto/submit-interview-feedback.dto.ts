@@ -2,7 +2,8 @@ import { IsMongoId, IsNumber, IsString, IsOptional, Min, Max } from 'class-valid
 
 export class SubmitInterviewFeedbackDto {
   @IsMongoId()
-  interviewId: string;
+  @IsOptional()
+  interviewId?: string; // Optional - comes from URL parameter
 
   @IsMongoId()
   interviewerId: string;

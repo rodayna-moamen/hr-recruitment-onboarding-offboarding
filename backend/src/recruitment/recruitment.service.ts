@@ -335,24 +335,57 @@ export class RecruitmentService {
   }
 
   async findAllApplications(filters?: any): Promise<Application[]> {
-    return this.applicationModel
-      .find(filters || {})
-      .populate('candidateId')
-      .populate('requisitionId')
-      .exec();
+    try {
+      const applications = await this.applicationModel
+        .find(filters || {})
+        .populate({
+          path: 'candidateId',
+          select: '_id', // Only select _id if collection exists
+          strictPopulate: false, // Don't throw error if collection doesn't exist
+        })
+        .populate({
+          path: 'requisitionId',
+          select: '_id requisitionId title openings location',
+          strictPopulate: false,
+        })
+        .exec();
+      return applications;
+    } catch (error) {
+      this.logger.error(`Error fetching applications: ${error.message}`);
+      // If populate fails, return without populate
+      return await this.applicationModel.find(filters || {}).exec();
+    }
   }
 
   async findApplicationById(id: string): Promise<Application> {
-    const application = await this.applicationModel
-      .findById(id)
-      .populate('candidateId')
-      .populate('requisitionId')
-      .exec();
-    
-    if (!application) {
-      throw new NotFoundException(`Application with ID ${id} not found`);
+    try {
+      const application = await this.applicationModel
+        .findById(id)
+        .populate({
+          path: 'candidateId',
+          strictPopulate: false,
+        })
+        .populate({
+          path: 'requisitionId',
+          strictPopulate: false,
+        })
+        .exec();
+      
+      if (!application) {
+        throw new NotFoundException(`Application with ID ${id} not found`);
+      }
+      return application;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      // If populate fails, try without populate
+      const application = await this.applicationModel.findById(id).exec();
+      if (!application) {
+        throw new NotFoundException(`Application with ID ${id} not found`);
+      }
+      return application;
     }
-    return application;
   }
 
   // ==========================================
@@ -500,10 +533,28 @@ export class RecruitmentService {
   }
 
   async findReferralsByCandidate(candidateId: string): Promise<Referral[]> {
-    return this.referralModel
-      .find({ candidateId: new Types.ObjectId(candidateId) })
-      .populate('referringEmployeeId')
-      .exec();
+    try {
+      const referrals = await this.referralModel
+        .find({ candidateId: new Types.ObjectId(candidateId) })
+        .populate({
+          path: 'referringEmployeeId',
+          select: '_id name email', // Select specific fields if User model exists
+          strictPopulate: false, // Allow populate to not fail if path is not found
+        })
+        .exec();
+      return referrals;
+    } catch (error) {
+      // If populate fails (e.g., User model not registered), return without populate
+      // This is expected in standalone mode where User model may not exist
+      if (error.message?.includes('Schema hasn\'t been registered')) {
+        this.logger.debug(`User model not registered, returning referrals without populate`);
+      } else {
+        this.logger.error(`Error fetching referrals: ${error.message}`);
+      }
+      return await this.referralModel
+        .find({ candidateId: new Types.ObjectId(candidateId) })
+        .exec();
+    }
   }
 
   // ==========================================
@@ -721,13 +772,23 @@ export class RecruitmentService {
     newStatus: ApplicationStatus,
     changedBy: string,
   ): Promise<ApplicationStatusHistory> {
+    // Handle 'system' or other non-ObjectId strings
+    let changedById: Types.ObjectId;
+    try {
+      changedById = new Types.ObjectId(changedBy);
+    } catch (error) {
+      // If changedBy is not a valid ObjectId (e.g., 'system'), use a default ObjectId
+      // In production, you'd want to use an actual system user ID
+      changedById = new Types.ObjectId('000000000000000000000000'); // Default system user
+    }
+
     const history = new this.applicationHistoryModel({
       applicationId: new Types.ObjectId(applicationId),
       oldStage: oldStage || 'none',
       newStage,
       oldStatus: oldStatus || 'none',
       newStatus,
-      changedBy: new Types.ObjectId(changedBy),
+      changedBy: changedById,
     });
 
     await history.save();
