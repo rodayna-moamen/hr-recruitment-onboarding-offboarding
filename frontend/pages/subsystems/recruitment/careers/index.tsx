@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+  import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import apiClient from '../../../../lib/apiClient';
 import { JobRequisition, JobTemplate } from '../../../../types/recruitment';
 
@@ -9,6 +9,13 @@ export default function Careers() {
   const [jobs, setJobs] = useState<JobWithTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // filters
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'closed'>(
+    'published',
+  );
+  const [locationFilter, setLocationFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -24,7 +31,22 @@ export default function Careers() {
     fetchJobs();
   }, []);
 
-  const publishedJobs = jobs.filter((job) => job.publishStatus !== 'closed');
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      const template = typeof job.templateId === 'object' ? job.templateId : undefined;
+      const statusMatches =
+        statusFilter === 'all' ? true : (job.publishStatus || 'draft') === statusFilter;
+      const locationMatches = locationFilter
+        ? (job.location || '').toLowerCase().includes(locationFilter.toLowerCase())
+        : true;
+      const searchMatches = searchTerm
+        ? `${template?.title || ''} ${template?.department || ''} ${job.requisitionId}`
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())
+        : true;
+      return statusMatches && locationMatches && searchMatches;
+    });
+  }, [jobs, statusFilter, locationFilter, searchTerm]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6 py-12">
@@ -37,22 +59,55 @@ export default function Careers() {
           </p>
         </header>
 
-        {loading && (
-          <div className="text-center text-slate-200/80">Loading jobs...</div>
-        )}
+        {/* Filters */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="space-y-2 text-sm text-slate-100">
+            <span>Status</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+              <option value="closed">Closed</option>
+            </select>
+          </label>
 
-        {error && !loading && (
-          <div className="text-center text-red-200">{error}</div>
-        )}
+          <label className="space-y-2 text-sm text-slate-100">
+            <span>Location</span>
+            <input
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              placeholder="e.g., Cairo"
+              className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </label>
 
-        {!loading && !error && publishedJobs.length === 0 && (
+          <label className="space-y-2 text-sm text-slate-100">
+            <span>Search</span>
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Title, department, or Req ID"
+              className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </label>
+        </div>
+
+        {loading && <div className="text-center text-slate-200/80">Loading jobs...</div>}
+
+        {error && !loading && <div className="text-center text-red-200">{error}</div>}
+
+        {!loading && !error && filteredJobs.length === 0 && (
           <div className="text-center text-slate-200/80">
-            No published jobs yet. Check back soon.
+            No jobs match your filters. Try clearing filters or check back soon.
           </div>
         )}
 
         <div className="grid gap-6 sm:grid-cols-2">
-          {publishedJobs.map((job) => {
+          {filteredJobs.map((job) => {
             const template = typeof job.templateId === 'object' ? job.templateId : undefined;
             return (
               <Link
@@ -68,11 +123,16 @@ export default function Careers() {
                   <p className="text-sm text-slate-200/80">
                     {template?.department ? `Department: ${template.department}` : 'Department: N/A'}
                   </p>
-                  <div className="flex items-center gap-3 text-xs text-blue-200/80">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-blue-200/80">
                     <span className="px-2 py-1 rounded-full bg-blue-500/20 border border-blue-400/40">
                       {job.publishStatus || 'draft'}
                     </span>
                     {job.location && <span className="text-slate-200/80">📍 {job.location}</span>}
+                    {job.postingDate && (
+                      <span className="text-slate-200/60">
+                        Posted {new Date(job.postingDate).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               </Link>

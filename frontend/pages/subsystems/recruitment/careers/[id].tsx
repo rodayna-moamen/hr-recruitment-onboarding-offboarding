@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useMemo, useState, FormEvent } from 'react';
 import apiClient from '../../../../lib/apiClient';
 import { JobRequisition, JobTemplate } from '../../../../types/recruitment';
 
@@ -12,11 +12,19 @@ export default function CareerDetail() {
   const [job, setJob] = useState<JobWithTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [candidateId, setCandidateId] = useState('');
   const [cvPath, setCvPath] = useState('');
   const [consentGiven, setConsentGiven] = useState(false);
-  const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>(
+    'idle',
+  );
   const [submitMessage, setSubmitMessage] = useState('');
+
+  const template = useMemo(
+    () => (job && typeof job.templateId === 'object' ? job.templateId : undefined),
+    [job],
+  );
 
   useEffect(() => {
     if (!id || Array.isArray(id)) return;
@@ -33,14 +41,36 @@ export default function CareerDetail() {
     fetchJob();
   }, [id]);
 
+  const isValidUrl = (value: string) => {
+    if (!value) return true;
+    try {
+      new URL(value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleApply = async (e: FormEvent) => {
     e.preventDefault();
     if (!id || Array.isArray(id)) return;
+
+    if (!candidateId.trim()) {
+      setSubmitState('error');
+      setSubmitMessage('Candidate ID is required.');
+      return;
+    }
     if (!consentGiven) {
       setSubmitState('error');
       setSubmitMessage('Consent is required to apply.');
       return;
     }
+    if (!isValidUrl(cvPath)) {
+      setSubmitState('error');
+      setSubmitMessage('Please enter a valid URL for CV/Resume.');
+      return;
+    }
+
     setSubmitState('submitting');
     setSubmitMessage('');
     try {
@@ -62,8 +92,6 @@ export default function CareerDetail() {
       setSubmitMessage(Array.isArray(message) ? message.join(', ') : message);
     }
   };
-
-  const template = job && typeof job.templateId === 'object' ? job.templateId : undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6 py-12">
@@ -102,17 +130,21 @@ export default function CareerDetail() {
                   <div className="space-y-3">
                     <h3 className="text-lg font-semibold">Qualifications</h3>
                     <ul className="list-disc pl-5 space-y-1 text-slate-200/80">
-                      {template?.qualifications?.length
-                        ? template.qualifications.map((q) => <li key={q}>{q}</li>)
-                        : <li>Not specified</li>}
+                      {template?.qualifications?.length ? (
+                        template.qualifications.map((q) => <li key={q}>{q}</li>)
+                      ) : (
+                        <li>Not specified</li>
+                      )}
                     </ul>
                   </div>
                   <div className="space-y-3">
                     <h3 className="text-lg font-semibold">Skills</h3>
                     <ul className="list-disc pl-5 space-y-1 text-slate-200/80">
-                      {template?.skills?.length
-                        ? template.skills.map((s) => <li key={s}>{s}</li>)
-                        : <li>Not specified</li>}
+                      {template?.skills?.length ? (
+                        template.skills.map((s) => <li key={s}>{s}</li>)
+                      ) : (
+                        <li>Not specified</li>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -157,9 +189,7 @@ export default function CareerDetail() {
                     onChange={(e) => setConsentGiven(e.target.checked)}
                     className="mt-1 h-4 w-4 rounded border-white/30 bg-slate-900/40"
                   />
-                  <span>
-                    I consent to data processing for recruitment purposes (required).
-                  </span>
+                  <span>I consent to data processing for recruitment purposes (required).</span>
                 </label>
 
                 <button
