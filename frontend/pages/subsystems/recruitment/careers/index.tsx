@@ -22,8 +22,10 @@ export default function Careers() {
       try {
         const res = await apiClient.get<JobWithTemplate[]>('/jobs');
         setJobs(res.data);
-      } catch (err) {
-        setError('Could not load jobs right now.');
+      } catch (err: any) {
+        console.error('Error fetching jobs:', err);
+        const errorMessage = err?.response?.data?.message || err?.message || 'Could not load jobs right now.';
+        setError(`Error: ${errorMessage}. Check console for details.`);
       } finally {
         setLoading(false);
       }

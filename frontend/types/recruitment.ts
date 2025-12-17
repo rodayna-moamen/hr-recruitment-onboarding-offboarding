@@ -48,3 +48,96 @@ export type Application = {
   createdAt?: string;
   updatedAt?: string;
 };
+
+export enum InterviewMethod {
+  ONSITE = 'onsite',
+  VIDEO = 'video',
+  PHONE = 'phone',
+}
+
+export enum InterviewStatus {
+  SCHEDULED = 'scheduled',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
+
+export type Interview = {
+  _id: string;
+  applicationId: string;
+  stage: ApplicationStage;
+  scheduledDate: string;
+  method: InterviewMethod;
+  panel: string[];
+  calendarEventId?: string;
+  videoLink?: string;
+  status: InterviewStatus;
+  feedbackId?: string;
+  candidateFeedback?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export enum OfferResponseStatus {
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+  PENDING = 'pending',
+}
+
+export enum OfferFinalStatus {
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  PENDING = 'pending',
+}
+
+export enum ApprovalStatus {
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  PENDING = 'pending',
+}
+
+export type OfferApprover = {
+  employeeId: string;
+  role: string;
+  status: ApprovalStatus;
+  actionDate: string;
+  comment?: string;
+};
+
+export type Offer = {
+  _id: string;
+  applicationId: string;
+  candidateId: string;
+  hrEmployeeId?: string;
+  grossSalary: number;
+  signingBonus?: number;
+  benefits?: string[];
+  conditions?: string;
+  insurances?: string;
+  content: string;
+  role: string;
+  deadline: string;
+  applicantResponse: OfferResponseStatus;
+  approvers: OfferApprover[];
+  finalStatus: OfferFinalStatus;
+  candidateSignedAt?: string;
+  hrSignedAt?: string;
+  managerSignedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AnalyticsData = {
+  totalApplications: number;
+  byStatus: Record<string, number>;
+  byStage: Record<string, number>;
+  averageTimeToHire: number;
+  conversionRates: {
+    screeningToInterview: number;
+    interviewToOffer: number;
+    offerToHired: number;
+  };
+  referralStats: {
+    totalReferrals: number;
+    referralPercentage: number;
+  };
+};
