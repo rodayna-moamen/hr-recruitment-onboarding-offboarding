@@ -15,38 +15,22 @@ import { Document,DocumentSchema } from './models/document.schema';
 import { TerminationRequest,TerminationRequestSchema } from './models/termination-request.schema';
 import { ClearanceChecklist,ClearanceChecklistSchema } from './models/clearance-checklist.schema';
 import { Onboarding,OnboardingSchema } from './models/onboarding.schema';
+
+import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
+import { OrganizationStructureModule } from '../organization-structure/organization-structure.module';
 import {
-  StubOnboardingService,
-  StubEmployeeProfileService,
-  StubOrganizationStructureService,
-} from './services/stub-services';
+  EmployeeProfileServiceAdapter,
+  OrganizationStructureServiceAdapter,
+} from './services/adapter-services';
+import { StubOnboardingService } from './services/stub-services';
 
 /**
- * RecruitmentModule with stub services for cross-subsystem integration.
- * 
- * When other subsystems are integrated:
- * 1. Import the real modules (e.g., EmployeeProfileModule, OnboardingModule, etc.)
- * 2. Remove the stub service providers
- * 3. The real services will be injected automatically via their modules
- * 
- * Example integration:
- * ```typescript
- * @Module({
- *   imports: [
- *     MongooseModule.forFeature([...]),
- *     EmployeeProfileModule,  // Add real module
- *     OnboardingModule,        // Add real module
- *     OrganizationStructureModule, // Add real module
- *   ],
- *   providers: [
- *     RecruitmentService,
- *     // Remove stub services - real ones come from imported modules
- *   ],
- * })
- * ```
+ * RecruitmentModule - Integrated with EmployeeProfile and OrganizationStructure subsystems.
+ * OnboardingModule not available - using stub service.
  */
 @Module({
-  imports:[MongooseModule.forFeature([
+  imports: [
+    MongooseModule.forFeature([
       { name: JobTemplate.name, schema: JobTemplateSchema },
       { name: JobRequisition.name, schema: JobRequisitionSchema },
       { name: Application.name, schema: ApplicationSchema },
@@ -60,26 +44,28 @@ import {
       { name: TerminationRequest.name, schema: TerminationRequestSchema },
       { name: ClearanceChecklist.name, schema: ClearanceChecklistSchema },
       { name: Onboarding.name, schema: OnboardingSchema },
-    ])
+    ]),
+    EmployeeProfileModule,
+    OrganizationStructureModule,
   ],
   controllers: [RecruitmentController],
   providers: [
     RecruitmentService,
-    // Stub services for standalone operation - replace with real modules when integrated
+    EmployeeProfileServiceAdapter,
+    OrganizationStructureServiceAdapter,
+    {
+      provide: 'IEmployeeProfileService',
+      useClass: EmployeeProfileServiceAdapter,
+    },
+    {
+      provide: 'IOrganizationStructureService',
+      useClass: OrganizationStructureServiceAdapter,
+    },
     {
       provide: 'IOnboardingService',
       useClass: StubOnboardingService,
     },
-    {
-      provide: 'IEmployeeProfileService',
-      useClass: StubEmployeeProfileService,
-    },
-    {
-      provide: 'IOrganizationStructureService',
-      useClass: StubOrganizationStructureService,
-    },
   ],
-  exports:[RecruitmentService]
-
+  exports: [RecruitmentService],
 })
 export class RecruitmentModule {}
