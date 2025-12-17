@@ -1,13 +1,107 @@
-export default function Applications() {
+import React, { useEffect, useState } from 'react';
+import { fetchApplications, fetchApplicationById, updateApplicationStatus, rejectApplication } from '../../../services/recruitment';
+import { Application, ApplicationStatus } from '../../../types/recruitment';
+import { ApplicationsTable } from '../../../components/recruitment/ApplicationsTable';
+import { ApplicationDetailDrawer } from '../../../components/recruitment/ApplicationDetailDrawer';
+
+const Applications: React.FC = () => {
+  const [apps, setApps] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filterStage, setFilterStage] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerApp, setDrawerApp] = useState<Application | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchApplications({
+      stage: filterStage as any,
+      status: filterStatus as any,
+    })
+      .then(res => {
+        setApps(res.data);
+        setError(null);
+      })
+      .catch(() => setError('Failed to fetch applications'))
+      .finally(() => setLoading(false));
+  }, [filterStage, filterStatus]);
+
+  const handleView = async (app: Application) => {
+    setDrawerApp(null);
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    setDrawerError(null);
+    try {
+      const res = await fetchApplicationById(app._id);
+      setDrawerApp(res.data);
+    } catch {
+      setDrawerError('Failed to fetch details');
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!drawerApp) return;
+    try {
+      await updateApplicationStatus(drawerApp._id, newStatus);
+      setDrawerApp(a => (a ? { ...a, status: newStatus as any } : a));
+      setApps(apps => apps.map(a => a._id === drawerApp._id ? { ...a, status: newStatus as any } : a));
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const handleReject = async () => {
+    if (!drawerApp) return;
+    await rejectApplication(drawerApp._id);
+    setDrawerApp(a => a ? { ...a, status: 'rejected' as ApplicationStatus } : a);
+    setApps(apps => apps.map(a => a._id === drawerApp._id ? { ...a, status: 'rejected' as ApplicationStatus } : a));
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6">
-      <div className="space-y-4 text-center max-w-2xl">
-        <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Recruitment</p>
-        <h1 className="text-4xl font-semibold">Applications Pipeline</h1>
-        <p className="text-slate-200/80">
-          Track candidates through stages, update statuses, and view history. UI coming soon.
-        </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6 py-12">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-3xl font-bold">Applications Pipeline</h1>
+            <p className="text-xs text-blue-300/80 uppercase tracking-widest">Recruitment - Internal HR</p>
+          </div>
+        </div>
+        <ApplicationsTable
+          apps={apps}
+          loading={loading}
+          error={error}
+          onView={handleView}
+          filterStage={filterStage}
+          setFilterStage={setFilterStage}
+          filterStatus={filterStatus}
+          setFilterStatus={setFilterStatus}
+        />
       </div>
+      <ApplicationDetailDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        application={drawerApp}
+        onStatusUpdated={handleStatusUpdate}
+        onRejected={handleReject}
+      />
+      {drawerLoading && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div className="bg-slate-800 p-8 text-white rounded shadow-xl text-lg">Loading details...</div>
+        </div>
+      )}
+      {drawerError && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div className="bg-red-800 p-8 text-red-200 rounded shadow-xl text-lg">{drawerError}</div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default Applications;
