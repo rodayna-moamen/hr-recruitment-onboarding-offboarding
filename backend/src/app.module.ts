@@ -1,34 +1,51 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './employee-profile/auth/auth.module';
+import { TimeManagementModule } from './time-management/time-management.module';
 import { RecruitmentModule } from './recruitment/recruitment.module';
-import { MongooseModule } from '@nestjs/mongoose';
+import { LeavesModule } from './leaves/leaves.module';
+import { PayrollTrackingModule } from './payroll-tracking/payroll-tracking.module';
+import { EmployeeProfileModule } from './employee-profile/employee-profile.module';
+import { PerformanceModule } from './performance/performance.module';
+import { PayrollConfigurationModule } from './payroll-configuration/payroll-configuration.module';
+import { PayrollExecutionModule } from './payroll-execution/payroll-execution.module';
 
-/**
- * AppModule - Main application module
- * 
- * Currently includes only the Recruitment module.
- * 
- * When other subsystems are ready, add them to imports:
- * - TimeManagementModule
- * - LeavesModule
- * - PayrollTrackingModule
- * - EmployeeProfileModule
- * - OrganizationStructureModule
- * - PerformanceModule
- * - PayrollConfigurationModule
- * - PayrollExecutionModule
- * - OnboardingModule (when created)
- * 
- * See: backend/src/recruitment/INTEGRATION_GUIDE.md for detailed integration instructions
- */
+import { OrganizationStructureModule } from './organization-structure/organization-structure.module';
+
+import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigModule } from '@nestjs/config';
+
+import { APP_GUARD } from '@nestjs/core';
+
 @Module({
   imports: [
-    MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/hr-system'),
+    
+    ConfigModule.forRoot({ isGlobal: true }),
+
+    MongooseModule.forRoot(
+      process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hr_system',
+    ),
+    
+    AuthModule,
+
+    // Load everything else first
+    TimeManagementModule,
     RecruitmentModule,
-    // Add other subsystem modules here when ready
+    LeavesModule,
+    PayrollExecutionModule,
+    PayrollConfigurationModule,
+    PayrollTrackingModule,
+    EmployeeProfileModule,
+    PerformanceModule,
+
+    // Load OrganizationStructureModule LAST
+    // so that Department schema is guaranteed to be registered
+    OrganizationStructureModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    
+    AppService],
 })
 export class AppModule {}

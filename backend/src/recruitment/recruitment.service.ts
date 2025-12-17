@@ -31,9 +31,9 @@ import { InterviewStatus } from './enums/interview-status.enum';
 import { OfferResponseStatus } from './enums/offer-response-status.enum';
 import { OfferFinalStatus } from './enums/offer-final-status.enum';
 import { ApprovalStatus } from './enums/approval-status.enum';
-import type { IOnboardingService } from '../shared/interfaces/onboarding.interface';
-import type { IEmployeeProfileService } from '../shared/interfaces/employee-profile.interface';
-import type { IOrganizationStructureService } from '../shared/interfaces/organization-structure.interface';
+import type { IOnboardingService } from './interfaces/onboarding.interface';
+import type { IEmployeeProfileService } from './interfaces/employee-profile.interface';
+import type { IOrganizationStructureService } from './interfaces/organization-structure.interface';
 
 /**
  * RecruitmentService with optional cross-subsystem dependencies.
