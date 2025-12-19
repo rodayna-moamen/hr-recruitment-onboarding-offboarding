@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchApplications, fetchApplicationById, updateApplicationStatus, rejectApplication } from '../../../services/recruitment';
 import { Application, ApplicationStatus } from '../../../types/recruitment';
-import { ApplicationsTable } from './_components/ApplicationsTable';
-import { ApplicationDetailDrawer } from './_components/ApplicationDetailDrawer';
+import { ApplicationsTable } from '../../../components/recruitment/ApplicationsTable';
+import { ApplicationDetailDrawer } from '../../../components/recruitment/ApplicationDetailDrawer';
 
 const Applications: React.FC = () => {
   const [apps, setApps] = useState<Application[]>([]);
