@@ -1,21 +1,37 @@
   import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import apiClient from '../../../../lib/apiClient';
 import { JobRequisition, JobTemplate } from '../../../../types/recruitment';
 
 type JobWithTemplate = JobRequisition & { templateId?: JobTemplate | string };
 
 export default function Careers() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<JobWithTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
-  // filters
+  // filters - default to 'published' for candidates, 'all' for HR
   const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'closed'>(
     'published',
   );
   const [locationFilter, setLocationFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    // Get user role
+    const role = localStorage.getItem('role');
+    setUserRole(role);
+    
+    // Candidates should only see published jobs by default
+    if (role === 'Job Candidate' || role === 'JOB_CANDIDATE') {
+      setStatusFilter('published');
+    } else {
+      setStatusFilter('all');
+    }
+  }, []);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -36,8 +52,13 @@ export default function Careers() {
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
       const template = typeof job.templateId === 'object' ? job.templateId : undefined;
-      const statusMatches =
-        statusFilter === 'all' ? true : (job.publishStatus || 'draft') === statusFilter;
+      
+      // Candidates can only see published jobs
+      const isCandidate = userRole === 'Job Candidate' || userRole === 'JOB_CANDIDATE';
+      const statusMatches = isCandidate
+        ? (job.publishStatus || 'draft') === 'published'
+        : statusFilter === 'all' ? true : (job.publishStatus || 'draft') === statusFilter;
+      
       const locationMatches = locationFilter
         ? (job.location || '').toLowerCase().includes(locationFilter.toLowerCase())
         : true;
@@ -48,34 +69,47 @@ export default function Careers() {
         : true;
       return statusMatches && locationMatches && searchMatches;
     });
-  }, [jobs, statusFilter, locationFilter, searchTerm]);
+  }, [jobs, statusFilter, locationFilter, searchTerm, userRole]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6 py-12">
       <div className="max-w-5xl mx-auto space-y-10">
-        <header className="space-y-3 text-center">
-          <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Careers</p>
-          <h1 className="text-4xl lg:text-5xl font-semibold">Open Roles</h1>
-          <p className="text-lg text-slate-200/80">
-            Browse current openings and apply in one flow.
-          </p>
+        <header className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="space-y-3 text-center flex-1">
+              <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Careers</p>
+              <h1 className="text-4xl lg:text-5xl font-semibold">Open Roles</h1>
+              <p className="text-lg text-slate-200/80">
+                Browse current openings and apply in one flow.
+              </p>
+            </div>
+            <Link
+              href="/subsystems/recruitment"
+              className="text-blue-300 hover:text-blue-200 underline text-sm self-start"
+            >
+              ← Back
+            </Link>
+          </div>
         </header>
 
         {/* Filters */}
         <div className="grid gap-4 md:grid-cols-3">
-          <label className="space-y-2 text-sm text-slate-100">
-            <span>Status</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All</option>
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
-              <option value="closed">Closed</option>
-            </select>
-          </label>
+          {/* Only show status filter for HR roles, candidates only see published */}
+          {(userRole !== 'Job Candidate' && userRole !== 'JOB_CANDIDATE') && (
+            <label className="space-y-2 text-sm text-slate-100">
+              <span>Status</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+                <option value="closed">Closed</option>
+              </select>
+            </label>
+          )}
 
           <label className="space-y-2 text-sm text-slate-100">
             <span>Location</span>

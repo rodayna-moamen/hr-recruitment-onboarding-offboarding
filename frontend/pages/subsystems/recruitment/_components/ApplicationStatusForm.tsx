@@ -1,5 +1,5 @@
 import React from 'react';
-import { ApplicationStatus } from '../../types/recruitment';
+import { ApplicationStatus } from '../../../../types/recruitment';
 
 const nextStatuses = [
   { value: 'in_process', label: 'In Process' },
@@ -51,3 +51,5 @@ export const ApplicationStatusForm: React.FC<ApplicationStatusFormProps> = ({ cu
     </form>
   );
 };
+
+// No default export - this is a component, not a page

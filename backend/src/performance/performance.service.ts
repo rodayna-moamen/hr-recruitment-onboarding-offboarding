@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -38,7 +39,11 @@ import {
   AppraisalRecordStatus,
   AppraisalDisputeStatus,
 } from './enums/performance.enums';
-
+import {
+  EmployeeProfile,
+  EmployeeProfileDocument,
+} from '../employee-profile/models/employee-profile.schema';
+import { CreateAppraisalTemplateDto } from './dto/create-appraisal-template.dto';
 @Injectable()
 export class PerformanceService {
   constructor(
@@ -53,16 +58,22 @@ export class PerformanceService {
 
     @InjectModel(AppraisalDispute.name)
     private readonly disputeModel: Model<AppraisalDisputeDocument>,
-  ) {}
+    @InjectModel(EmployeeProfile.name)
+  private readonly employeeModel: Model<EmployeeProfileDocument>,
+) {}
 
   // ======================================================
   // TEMPLATES
   // ======================================================
 
-  async createTemplate(body: any) {
-    const created = new this.templateModel(body);
-    return created.save();
+  async createTemplate(dto: CreateAppraisalTemplateDto) {
+  if (!dto.criteria || dto.criteria.length === 0) {
+    throw new BadRequestException("Template must have at least one criterion");
   }
+
+  return this.templateModel.create(dto);
+}
+
 
   async getAllTemplates() {
     return this.templateModel.find().lean();
@@ -149,14 +160,36 @@ export class PerformanceService {
 
   // Manager creates appraisal record
   async createAppraisal(dto: CreateAppraisalRecordDto, managerId: string) {
-    const record = new this.recordModel({
-      ...dto,
-      managerProfileId: new Types.ObjectId(managerId),
-      status: AppraisalRecordStatus.DRAFT,
-    });
 
-    return record.save();
+  // 🔎 FIND EMPLOYEE BY EMP NUMBER
+  const employee = await this.employeeModel.findOne({
+    employeeNumber: dto.employeeProfileId, // EMP002
+  });
+
+  if (!employee) {
+    throw new NotFoundException(
+      `Employee with number ${dto.employeeProfileId} not found`
+    );
   }
+
+  const record = new this.recordModel({
+    cycleId: new Types.ObjectId(dto.cycleId),
+    templateId: new Types.ObjectId(dto.templateId),
+
+    // ✅ REAL Mongo ID
+    employeeProfileId: employee._id,
+
+    assignmentId: new Types.ObjectId(), // auto
+    managerProfileId: new Types.ObjectId(managerId),
+
+    status: AppraisalRecordStatus.DRAFT,
+    createdAt: new Date(),
+  });
+
+  return record.save();
+}
+
+
 
   // Manager edits the appraisal content
   async updateAppraisal(
@@ -223,28 +256,63 @@ export class PerformanceService {
   }
 
   // List all appraisals in cycle
-  async findCycleAppraisals(cycleId: string) {
-  return this.recordModel.find({ cycleId: cycleId }).lean();
+
+
+async findCycleAppraisals(cycleId: string) {
+  return this.recordModel
+    .find({ cycleId: new Types.ObjectId(cycleId) })
+    .populate({
+      path: "employeeProfileId",
+      select: "firstName lastName employeeNumber",
+    })
+    .lean();
 }
+
+
 
 
   // Employee: list my appraisals
-  async findMyAppraisals(employeeId: string) {
-  return this.recordModel
-    .find({ employeeProfileId: employeeId }) // ✅ DON'T convert to ObjectId
-    .lean();
+  // performance.service.ts
+async findMyAppraisals(employeeId: string) {
+  return this.recordModel.find({
+    employeeProfileId: new Types.ObjectId(employeeId),
+  }).lean();
 }
+
+
 
 
   // Employee: get one
   async findMyAppraisalById(employeeId: string, recordId: string) {
   const record = await this.recordModel
-    .findOne({ _id: recordId, employeeProfileId: employeeId })
+    .findOne({
+      _id: new Types.ObjectId(recordId),
+      employeeProfileId: new Types.ObjectId(employeeId),
+    })
+    .populate({
+      path: "cycleId",
+      select: "name status",
+    })
+    .populate({
+      path: "templateId",
+      select: "name",
+    })
     .lean();
 
-  if (!record) throw new NotFoundException("Appraisal not found");
+  if (!record) {
+    throw new NotFoundException("Appraisal not found");
+  }
+
   return record;
 }
+
+
+  // Manager/HR/Admin: get one appraisal by id
+  async getAppraisalById(id: string) {
+    const record = await this.recordModel.findById(id).lean();
+    if (!record) throw new NotFoundException('Appraisal not found');
+    return record;
+  }
 
   // Employee acknowledges appraisal (NO enum value for acknowledge)
  async employeeAcknowledgeAppraisal(
@@ -323,10 +391,25 @@ async canRaiseDispute(cycleId: string) {
   const cycle = await this.cycleModel.findById(id);
   if (!cycle) throw new NotFoundException('Cycle not found');
 
-  cycle.status = AppraisalCycleStatus.CLOSED; // or keep same, depends on flow
+  // ❗ Ensure all appraisals are HR_PUBLISHED
+  const notPublished = await this.recordModel.findOne({
+    cycleId: id,
+    status: { $ne: AppraisalRecordStatus.HR_PUBLISHED },
+  });
+
+  if (notPublished) {
+    throw new BadRequestException(
+      'Cannot publish results: some appraisals are not published by HR',
+    );
+  }
+
+  cycle.status = AppraisalCycleStatus.CLOSED;
+  cycle.closedAt = new Date();
   cycle.publishedAt = new Date();
+
   return cycle.save();
 }
+
 async deleteDispute(id: string) {
   const deleted = await this.disputeModel.findByIdAndDelete(id);
   if (!deleted) throw new NotFoundException('Dispute not found');
@@ -357,10 +440,9 @@ async deleteDispute(id: string) {
   return dispute.save();
 }
 async getDisputeById(id: string) {
-  const dispute = await this.disputeModel.findById(id);
-  if (!dispute) throw new NotFoundException('Dispute not found');
-  return dispute;
+  return this.disputeModel.findById(id).lean();
 }
+
 
 
 }

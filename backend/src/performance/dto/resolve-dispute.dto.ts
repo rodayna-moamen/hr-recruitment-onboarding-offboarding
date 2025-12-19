@@ -3,8 +3,8 @@ import { AppraisalDisputeStatus } from '../enums/performance.enums';
 
 export class ResolveDisputeDto {
   @IsEnum(AppraisalDisputeStatus)
-  newStatus: AppraisalDisputeStatus; // ✅ renamed to avoid duplicate identifier
-  
+  newStatus: AppraisalDisputeStatus;
+
   @IsOptional()
   @IsString()
   resolutionSummary?: string;
@@ -16,9 +16,4 @@ export class ResolveDisputeDto {
   @IsOptional()
   @IsString()
   updatedOverallRatingLabel?: string;
-
-
-  @IsString()
-  @IsNotEmpty()
-  decision: string;
 }

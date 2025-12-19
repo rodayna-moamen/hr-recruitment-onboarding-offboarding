@@ -56,23 +56,57 @@ export default function Interviews() {
   }, []);
 
   useEffect(() => {
+    // Always fetch all interviews on mount and when filters change
+    fetchAllInterviews();
+  }, []);
+
+  useEffect(() => {
+    // When an application is selected, filter interviews by that application
     if (selectedApplicationId) {
-      fetchInterviews(selectedApplicationId);
+      fetchInterviewsByApplication(selectedApplicationId);
     } else {
-      setInterviews([]);
-      setLoading(false);
+      // If no application selected, show all interviews
+      fetchAllInterviews();
     }
   }, [selectedApplicationId]);
 
-  const fetchInterviews = async (applicationId: string) => {
+  const fetchAllInterviews = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiClient.get<Interview[]>('/interviews');
+      const sortedInterviews = Array.isArray(res.data) 
+        ? res.data.sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+        : [];
+      setInterviews(sortedInterviews);
+    } catch (err: any) {
+      console.error('Error fetching interviews:', err);
+      if (err?.code === 'ERR_NETWORK' || err?.code === 'ERR_CONNECTION_REFUSED') {
+        setError('Cannot connect to server. Please ensure the backend is running.');
+      } else {
+        setError(err?.response?.data?.message || 'Could not load interviews.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchInterviewsByApplication = async (applicationId: string) => {
     setLoading(true);
     setError(null);
     try {
       const res = await apiClient.get<Interview[]>(`/interviews?applicationId=${applicationId}`);
-      setInterviews(Array.isArray(res.data) ? res.data : []);
+      const sortedInterviews = Array.isArray(res.data) 
+        ? res.data.sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+        : [];
+      setInterviews(sortedInterviews);
     } catch (err: any) {
       console.error('Error fetching interviews:', err);
-      setError(err?.response?.data?.message || 'Could not load interviews.');
+      if (err?.code === 'ERR_NETWORK' || err?.code === 'ERR_CONNECTION_REFUSED') {
+        setError('Cannot connect to server. Please ensure the backend is running.');
+      } else {
+        setError(err?.response?.data?.message || 'Could not load interviews.');
+      }
     } finally {
       setLoading(false);
     }
@@ -98,16 +132,58 @@ export default function Interviews() {
         return;
       }
 
+      // Validate applicationId is provided
+      const appId = scheduleForm.applicationId || selectedApplicationId;
+      if (!appId) {
+        alert('Please select an application first.');
+        return;
+      }
+
+      // Ensure scheduledDate is in ISO format
+      if (!scheduleForm.scheduledDate) {
+        alert('Please select a scheduled date and time.');
+        return;
+      }
+
+      // Convert datetime-local format to ISO 8601 string
+      // datetime-local returns "YYYY-MM-DDTHH:mm" format (local time, no timezone)
+      // We need to convert it to ISO 8601 format: "YYYY-MM-DDTHH:mm:ss.sssZ"
+      let scheduledDateISO: string;
+      try {
+        // datetime-local input gives us "YYYY-MM-DDTHH:mm" in local time
+        // Create a date object - this interprets it as local time
+        const dateObj = new Date(scheduleForm.scheduledDate);
+        
+        // Check if date is valid
+        if (isNaN(dateObj.getTime())) {
+          alert('Invalid date format. Please select a valid date and time.');
+          return;
+        }
+        
+        // Convert to ISO 8601 string (UTC)
+        scheduledDateISO = dateObj.toISOString();
+        console.log('Date conversion:', {
+          input: scheduleForm.scheduledDate,
+          dateObj: dateObj,
+          isoString: scheduledDateISO
+        });
+      } catch (error) {
+        console.error('Date conversion error:', error);
+        alert('Invalid date format. Please select a valid date and time.');
+        return;
+      }
+
       const payload = {
-        applicationId: scheduleForm.applicationId || selectedApplicationId,
+        applicationId: appId,
         stage: scheduleForm.stage,
-        scheduledDate: new Date(scheduleForm.scheduledDate).toISOString(),
+        scheduledDate: scheduledDateISO,
         method: scheduleForm.method,
         panel: validPanel,
         ...(scheduleForm.videoLink && { videoLink: scheduleForm.videoLink }),
         ...(scheduleForm.calendarEventId && { calendarEventId: scheduleForm.calendarEventId }),
       };
       
+      console.log('Sending interview payload:', JSON.stringify(payload, null, 2));
       await apiClient.post('/interviews', payload);
       setShowScheduleForm(false);
       setScheduleForm({
@@ -120,15 +196,37 @@ export default function Interviews() {
         calendarEventId: '',
       });
       if (selectedApplicationId) {
-        fetchInterviews(selectedApplicationId);
+        fetchInterviewsByApplication(selectedApplicationId);
+      } else {
+        fetchAllInterviews();
       }
     } catch (err: any) {
       console.error('Error scheduling interview:', err);
-      const errorMessage = err?.response?.data?.message || 
-                          (err?.response?.data?.error && Array.isArray(err.response.data.error) 
-                            ? err.response.data.error.join(', ') 
-                            : err?.response?.data?.error) ||
-                          'Failed to schedule interview.';
+      console.error('Error response:', err?.response?.data);
+      
+      let errorMessage = 'Failed to schedule interview.';
+      
+      if (err?.response?.data) {
+        const errorData = err.response.data;
+        
+        // Handle validation errors (array of error messages)
+        if (Array.isArray(errorData.message)) {
+          errorMessage = errorData.message.join(', ');
+        } 
+        // Handle single error message
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        // Handle error object with details
+        else if (errorData.error) {
+          if (Array.isArray(errorData.error)) {
+            errorMessage = errorData.error.join(', ');
+          } else {
+            errorMessage = String(errorData.error);
+          }
+        }
+      }
+      
       alert(errorMessage);
     }
   };
@@ -141,7 +239,9 @@ export default function Interviews() {
       setShowFeedbackForm(false);
       setSelectedInterview(null);
       if (selectedApplicationId) {
-        fetchInterviews(selectedApplicationId);
+        fetchInterviewsByApplication(selectedApplicationId);
+      } else {
+        fetchAllInterviews();
       }
     } catch (err: any) {
       console.error('Error submitting feedback:', err);
@@ -171,23 +271,38 @@ export default function Interviews() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6 py-12">
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="space-y-3">
-        <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Recruitment</p>
-          <h1 className="text-4xl lg:text-5xl font-semibold">Interviews</h1>
-          <p className="text-lg text-slate-200/80">
-            Schedule interviews, manage panels, and submit feedback.
-          </p>
+          <div className="flex items-center justify-between">
+            <div className="space-y-3">
+              <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Recruitment</p>
+              <h1 className="text-4xl lg:text-5xl font-semibold">Interviews</h1>
+              <p className="text-lg text-slate-200/80">
+                Schedule interviews, manage panels, and submit feedback.
+              </p>
+            </div>
+            <Link
+              href="/subsystems/recruitment"
+              className="text-blue-300 hover:text-blue-200 underline text-sm self-start"
+            >
+              ← Back
+            </Link>
+          </div>
         </header>
 
         {/* Application Selector */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <p className="text-sm text-slate-300 mb-4">
+            {selectedApplicationId 
+              ? 'Showing interviews for selected application. Select "All Interviews" to see all interviews.'
+              : 'Showing all interviews sorted by date. Select an application to filter by application.'}
+          </p>
           <label className="space-y-2 block">
-            <span className="text-sm text-slate-100 font-semibold">Select Application</span>
+            <span className="text-sm text-slate-100 font-semibold">Filter by Application (Optional)</span>
             <select
               value={selectedApplicationId}
               onChange={(e) => setSelectedApplicationId(e.target.value)}
               className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">-- Select an application --</option>
+              <option value="">📋 All Interviews (Sorted by Date)</option>
               {applications.map((app) => (
                 <option key={app._id} value={app._id}>
                   Application {app._id.slice(-8)} - {app.status} ({app.currentStage})
@@ -417,8 +532,8 @@ export default function Interviews() {
                       setSelectedInterview(interview);
                       setShowFeedbackForm(true);
                     }}
-                    disabled={interview.status === InterviewStatus.COMPLETED}
-                    className="px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 text-sm"
+                    title={new Date(interview.scheduledDate) > new Date() ? 'You can submit feedback even for future interviews' : ''}
                   >
                     Submit Feedback
                   </button>

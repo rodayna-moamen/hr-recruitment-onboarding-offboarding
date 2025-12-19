@@ -12,4 +12,11 @@ export * from './respond-offer.dto';
 export * from './create-referral.dto';
 export * from './rejection-template.dto';
 export * from './analytics-query.dto';
+export * from './create-onboarding-checklist.dto';
+export * from './upload-document.dto';
+export * from './update-onboarding-task.dto';
+export * from './create-termination-request.dto';
+export * from './initiate-termination-review.dto';
+export * from './update-clearance-item.dto';
+export * from './update-equipment-return.dto';
 

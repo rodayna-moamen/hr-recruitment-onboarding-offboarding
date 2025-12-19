@@ -17,8 +17,13 @@ export interface IOnboardingService {
       role: string;
       department: string;
       grossSalary: number;
+      signingBonus?: number;
       startDate?: Date;
+      employeeId?: string;
+      contractId?: string;
+      contractDocumentId?: string;
+      signedContractUrl?: string;
     },
-  ): Promise<{ onboardingId: string; tasks: any[] }>;
+  ): Promise<{ onboardingId: string; tasks: any[]; contractId: string }>;
 }
 

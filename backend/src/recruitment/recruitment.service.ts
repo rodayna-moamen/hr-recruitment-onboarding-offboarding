@@ -25,15 +25,20 @@ import { Interview } from './models/interview.schema';
 import { AssessmentResult } from './models/assessment-result.schema';
 import { Referral } from './models/referral.schema';
 import { Offer } from './models/offer.schema';
+import { Contract } from './models/contract.schema';
+import { Candidate } from '../employee-profile/models/candidate.schema';
 import { ApplicationStage } from './enums/application-stage.enum';
 import { ApplicationStatus } from './enums/application-status.enum';
 import { InterviewStatus } from './enums/interview-status.enum';
+import { InterviewMethod } from './enums/interview-method.enum';
 import { OfferResponseStatus } from './enums/offer-response-status.enum';
 import { OfferFinalStatus } from './enums/offer-final-status.enum';
 import { ApprovalStatus } from './enums/approval-status.enum';
 import type { IOnboardingService } from './interfaces/onboarding.interface';
 import type { IEmployeeProfileService } from './interfaces/employee-profile.interface';
 import type { IOrganizationStructureService } from './interfaces/organization-structure.interface';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType, NotificationChannel } from '../notifications/models/notification-log.schema';
 
 /**
  * RecruitmentService with optional cross-subsystem dependencies.
@@ -68,9 +73,15 @@ export class RecruitmentService {
     private referralModel: Model<Referral>,
     @InjectModel(Offer.name)
     private offerModel: Model<Offer>,
+    @InjectModel(Contract.name)
+    private contractModel: Model<Contract>,
+    @InjectModel(Candidate.name)
+    private candidateModel: Model<Candidate>,
     @Optional() @Inject('IOnboardingService') private onboardingService?: IOnboardingService,
     @Optional() @Inject('IEmployeeProfileService') private employeeProfileService?: IEmployeeProfileService,
     @Optional() @Inject('IOrganizationStructureService') private orgStructureService?: IOrganizationStructureService,
+    @Optional() @Inject('ITimeManagementService') private timeManagementService?: any,
+    @Optional() private notificationsService?: NotificationsService,
   ) {}
 
   // ==========================================
@@ -98,6 +109,15 @@ export class RecruitmentService {
       throw new BadRequestException('Skills are required (BR2)');
     }
 
+    // Validate department with organization structure (REC-003)
+    if (this.orgStructureService && dto.department) {
+      const isValid = await this.orgStructureService.validateDepartment(dto.department);
+      if (!isValid) {
+        throw new BadRequestException(`Department "${dto.department}" not found in organization structure. Please use a valid department.`);
+      }
+      this.logger.log(`Department "${dto.department}" validated successfully`);
+    }
+
     const template = new this.jobTemplateModel(dto);
     await template.save();
     
@@ -118,6 +138,15 @@ export class RecruitmentService {
   }
 
   async updateJobTemplate(id: string, dto: UpdateJobTemplateDto): Promise<JobTemplate> {
+    // Validate department if being updated (REC-003)
+    if (dto.department && this.orgStructureService) {
+      const isValid = await this.orgStructureService.validateDepartment(dto.department);
+      if (!isValid) {
+        throw new BadRequestException(`Department "${dto.department}" not found in organization structure. Please use a valid department.`);
+      }
+      this.logger.log(`Department "${dto.department}" validated successfully`);
+    }
+
     const template = await this.jobTemplateModel
       .findByIdAndUpdate(id, dto, { new: true })
       .exec();
@@ -158,7 +187,16 @@ export class RecruitmentService {
 
     // Validate template exists if provided
     if (dto.templateId) {
-      await this.findJobTemplateById(dto.templateId);
+      const template = await this.findJobTemplateById(dto.templateId);
+      
+      // Validate department from template with organization structure (REC-003)
+      if (this.orgStructureService && template.department) {
+        const isValid = await this.orgStructureService.validateDepartment(template.department);
+        if (!isValid) {
+          throw new BadRequestException(`Department "${template.department}" from template not found in organization structure. Please update the template with a valid department.`);
+        }
+        this.logger.log(`Department "${template.department}" from template validated successfully`);
+      }
     }
 
     const requisition = new this.jobRequisitionModel(dto);
@@ -193,11 +231,23 @@ export class RecruitmentService {
     return requisition;
   }
 
-  async findAllJobRequisitions(): Promise<JobRequisition[]> {
+  async findAllJobRequisitions(userRole?: string): Promise<JobRequisition[]> {
+    // Candidates can only see published jobs (BR6)
+    const isCandidate = userRole === 'Job Candidate' || userRole === 'JOB_CANDIDATE' || userRole === 'job_candidate';
+    
+    if (isCandidate) {
+      // Only return published jobs for candidates
+      return this.jobRequisitionModel
+        .find({ publishStatus: 'published' })
+        .populate('templateId')
+        .exec();
+    }
+    
+    // HR employees and managers can see all jobs (published, draft, closed)
     return this.jobRequisitionModel.find().populate('templateId').exec();
   }
 
-  async findJobRequisitionById(id: string): Promise<JobRequisition> {
+  async findJobRequisitionById(id: string, userRole?: string): Promise<JobRequisition> {
     const requisition = await this.jobRequisitionModel
       .findById(id)
       .populate('templateId')
@@ -206,6 +256,13 @@ export class RecruitmentService {
     if (!requisition) {
       throw new NotFoundException(`Job requisition with ID ${id} not found`);
     }
+    
+    // Candidates can only access published jobs (BR6)
+    const isCandidate = userRole === 'Job Candidate' || userRole === 'JOB_CANDIDATE' || userRole === 'job_candidate';
+    if (isCandidate && requisition.publishStatus !== 'published') {
+      throw new NotFoundException(`Job requisition with ID ${id} not found`);
+    }
+    
     return requisition;
   }
 
@@ -239,10 +296,15 @@ export class RecruitmentService {
       throw new BadRequestException('Candidate consent is required for data processing (BR28)');
     }
 
+    // BR12: Validate CV is provided (required)
+    if (!dto.cvPath || !dto.cvPath.trim()) {
+      throw new BadRequestException('CV/Resume is required (BR12)');
+    }
+
     // Validate requisition exists
     await this.findJobRequisitionById(dto.requisitionId);
 
-    // BR12: Create application (CV storage would be handled by file upload endpoint)
+    // BR12: Create application (CV can be file data URL or URL path)
     const application = new this.applicationModel({
       candidateId: new Types.ObjectId(dto.candidateId),
       requisitionId: new Types.ObjectId(dto.requisitionId),
@@ -252,6 +314,38 @@ export class RecruitmentService {
     });
 
     await application.save();
+
+    // BR28: Log consent in NotificationLog for tracking (REC-028)
+    if (this.notificationsService && dto.consentGiven) {
+      try {
+        // Get candidate details for logging
+        const candidate = await this.candidateModel.findById(dto.candidateId).exec();
+        const candidateEmail = candidate?.personalEmail || (candidate as any)?.email || 'unknown@example.com';
+        const candidateName = candidate?.firstName && candidate?.lastName
+          ? `${candidate.firstName} ${candidate.lastName}`
+          : (candidate as any)?.fullName || 'Candidate';
+
+        await this.notificationsService.logNotification({
+          type: NotificationType.CONSENT_GIVEN,
+          channel: NotificationChannel.IN_APP,
+          recipientId: dto.candidateId,
+          recipientEmail: candidateEmail,
+          recipientName: candidateName,
+          subject: 'Consent Given for Data Processing',
+          content: `Consent given for application ${application._id}`,
+          metadata: {
+            applicationId: application._id.toString(),
+            consentGiven: true,
+            timestamp: new Date().toISOString(),
+          },
+          relatedEntityId: application._id.toString(),
+          relatedEntityType: 'application',
+        });
+        this.logger.log(`Consent logged for application ${application._id} (BR28, REC-028)`);
+      } catch (error) {
+        this.logger.warn(`Failed to log consent: ${error.message}`);
+      }
+    }
 
     // BR14, BR25: Handle referral tagging if applicable
     if (dto.isReferral && dto.referredBy) {
@@ -334,13 +428,44 @@ export class RecruitmentService {
       .exec();
   }
 
-  async findAllApplications(filters?: any): Promise<Application[]> {
+  async findAllApplications(filters?: any, userRole?: string, userId?: string): Promise<Application[]> {
     try {
+      // Build query object
+      const query: any = {};
+      
+      // Candidates can only see their own applications
+      const isCandidate = userRole === 'Job Candidate' || userRole === 'JOB_CANDIDATE' || userRole === 'job_candidate';
+      if (isCandidate && userId) {
+        // Force filter to only show candidate's own applications
+        if (Types.ObjectId.isValid(userId)) {
+          query.candidateId = new Types.ObjectId(userId);
+        } else {
+          this.logger.warn(`Invalid userId for candidate: ${userId}`);
+          return []; // Return empty array if invalid userId
+        }
+      } else if (filters) {
+        // HR employees/managers can filter by any criteria
+        if (filters.currentStage) {
+          query.currentStage = filters.currentStage;
+        }
+        if (filters.status) {
+          query.status = filters.status;
+        }
+        if (filters.candidateId) {
+          // Convert candidateId string to ObjectId for query
+          if (Types.ObjectId.isValid(filters.candidateId)) {
+            query.candidateId = new Types.ObjectId(filters.candidateId);
+          } else {
+            this.logger.warn(`Invalid candidateId filter: ${filters.candidateId}`);
+          }
+        }
+      }
+
       const applications = await this.applicationModel
-        .find(filters || {})
+        .find(query)
         .populate({
           path: 'candidateId',
-          select: '_id', // Only select _id if collection exists
+          select: '_id candidateNumber firstName lastName email',
           strictPopulate: false, // Don't throw error if collection doesn't exist
         })
         .populate({
@@ -353,11 +478,24 @@ export class RecruitmentService {
     } catch (error) {
       this.logger.error(`Error fetching applications: ${error.message}`);
       // If populate fails, return without populate
-      return await this.applicationModel.find(filters || {}).exec();
+      const query: any = {};
+      
+      // Apply same candidate restriction
+      const isCandidate = userRole === 'Job Candidate' || userRole === 'JOB_CANDIDATE' || userRole === 'job_candidate';
+      if (isCandidate && userId && Types.ObjectId.isValid(userId)) {
+        query.candidateId = new Types.ObjectId(userId);
+      } else if (filters) {
+        if (filters.currentStage) query.currentStage = filters.currentStage;
+        if (filters.status) query.status = filters.status;
+        if (filters.candidateId && Types.ObjectId.isValid(filters.candidateId)) {
+          query.candidateId = new Types.ObjectId(filters.candidateId);
+        }
+      }
+      return await this.applicationModel.find(query).exec();
     }
   }
 
-  async findApplicationById(id: string): Promise<Application> {
+  async findApplicationById(id: string, userRole?: string, userId?: string): Promise<Application> {
     try {
       const application = await this.applicationModel
         .findById(id)
@@ -374,6 +512,17 @@ export class RecruitmentService {
       if (!application) {
         throw new NotFoundException(`Application with ID ${id} not found`);
       }
+      
+      // Candidates can only access their own applications
+      const isCandidate = userRole === 'Job Candidate' || userRole === 'JOB_CANDIDATE' || userRole === 'job_candidate';
+      if (isCandidate && userId) {
+        const applicationCandidateId = application.candidateId?.toString() || (application.candidateId as any)?._id?.toString();
+        const userIdStr = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId).toString() : userId;
+        if (applicationCandidateId !== userIdStr) {
+          throw new NotFoundException(`Application with ID ${id} not found`);
+        }
+      }
+      
       return application;
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -384,6 +533,17 @@ export class RecruitmentService {
       if (!application) {
         throw new NotFoundException(`Application with ID ${id} not found`);
       }
+      
+      // Apply same candidate restriction
+      const isCandidate = userRole === 'Job Candidate' || userRole === 'JOB_CANDIDATE' || userRole === 'job_candidate';
+      if (isCandidate && userId) {
+        const applicationCandidateId = application.candidateId?.toString() || (application.candidateId as any)?._id?.toString();
+        const userIdStr = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId).toString() : userId;
+        if (applicationCandidateId !== userIdStr) {
+          throw new NotFoundException(`Application with ID ${id} not found`);
+        }
+      }
+      
       return application;
     }
   }
@@ -405,16 +565,41 @@ export class RecruitmentService {
     // Validate application exists
     const application = await this.findApplicationById(dto.applicationId);
 
+    // ✅ ENSURE ONLY ONE INTERVIEW PER APPLICATION PER STAGE
+    // Applications can have multiple interviews at different stages (Screening, Department, HR)
+    const existingInterview = await this.interviewModel.findOne({
+      applicationId: new Types.ObjectId(dto.applicationId),
+      stage: dto.stage,
+    }).exec();
+
+    if (existingInterview) {
+      throw new BadRequestException(`An interview already exists for this application at the ${dto.stage} stage. Only one interview per stage is allowed.`);
+    }
+
     // BR19(a): Validate panel members exist (would check user service in real implementation)
     if (!dto.panel || dto.panel.length === 0) {
       throw new BadRequestException('At least one panel member is required (BR19)');
+    }
+
+    // Validate and parse scheduledDate
+    let scheduledDate: Date;
+    try {
+      scheduledDate = typeof dto.scheduledDate === 'string' ? new Date(dto.scheduledDate) : dto.scheduledDate;
+      if (isNaN(scheduledDate.getTime())) {
+        throw new BadRequestException('Invalid scheduledDate format. Must be a valid ISO 8601 date string.');
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Invalid scheduledDate format. Must be a valid ISO 8601 date string.');
     }
 
     // Create interview
     const interview = new this.interviewModel({
       applicationId: new Types.ObjectId(dto.applicationId),
       stage: dto.stage,
-      scheduledDate: dto.scheduledDate,
+      scheduledDate: scheduledDate,
       method: dto.method,
       panel: dto.panel.map(id => new Types.ObjectId(id)),
       videoLink: dto.videoLink,
@@ -424,6 +609,56 @@ export class RecruitmentService {
 
     await interview.save();
 
+    // BR19(c): Create calendar event via Time Management (REC-010, REC-021)
+    if (this.timeManagementService && dto.panel && dto.panel.length > 0) {
+      try {
+        // Calculate end time (assume 1 hour interview duration)
+        const startTime = scheduledDate;
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour later
+
+        // Check panel member availability (BR19b)
+        const availability = await this.timeManagementService.checkAvailability(
+          dto.panel,
+          startTime,
+          endTime,
+        );
+
+        // Log availability issues but don't block scheduling (warn only)
+        const unavailableMembers = availability.filter(a => !a.available);
+        if (unavailableMembers.length > 0) {
+          this.logger.warn(`Some panel members are unavailable: ${unavailableMembers.map(a => a.employeeId).join(', ')}`);
+        }
+
+        // Get panel member emails for calendar invite
+        const panelEmails: string[] = [];
+        // In real implementation, fetch emails from Employee Profile service
+        // For now, we'll create the event and let the notification service handle emails
+
+        const calendarEvent = await this.timeManagementService.createCalendarEvent({
+          title: `Interview - Application ${dto.applicationId}`,
+          description: `Interview scheduled for application ${dto.applicationId} at stage ${dto.stage}`,
+          startTime: startTime,
+          endTime: endTime,
+          attendees: dto.panel,
+          location: dto.method === InterviewMethod.ONSITE ? 'Office' : undefined,
+          videoLink: dto.videoLink,
+        });
+
+        // Update interview with calendar event ID
+        interview.calendarEventId = calendarEvent.eventId;
+        await interview.save();
+
+        // Send calendar invites to panel members
+        if (calendarEvent.eventId && panelEmails.length > 0) {
+          await this.timeManagementService.sendCalendarInvite(calendarEvent.eventId, panelEmails);
+        }
+
+        this.logger.log(`Calendar event created: ${calendarEvent.eventId} (BR19c)`);
+      } catch (error) {
+        this.logger.warn(`Failed to create calendar event: ${error.message}. Interview scheduled without calendar integration.`);
+      }
+    }
+
     // BR19(c): Send calendar invites to interviewers (notification hook)
     await this.sendInterviewInvites(interview, 'panel');
     
@@ -432,6 +667,44 @@ export class RecruitmentService {
 
     this.logger.log(`Interview scheduled with ID: ${interview._id} (BR19)`);
     return interview;
+  }
+
+  /**
+   * Get evaluation criteria for a role (REC-020, REC-015)
+   * BR21: Criteria used in assessment are pre-set and agreed upon
+   * Returns default criteria if no role-specific criteria found
+   */
+  async getEvaluationCriteria(role: string, department?: string): Promise<{
+    criteria: Array<{ name: string; weight: number; description?: string }>;
+  }> {
+    // Try to get criteria from job template if department provided
+    if (department) {
+      try {
+        const template = await this.jobTemplateModel.findOne({ department, title: role }).exec();
+        if (template) {
+          // Use template skills/qualifications as criteria basis
+          const criteria = [
+            { name: 'Technical Skills', weight: 3, description: `Assess: ${template.skills?.join(', ') || 'Technical competency'}` },
+            { name: 'Communication', weight: 2, description: 'Verbal and written communication skills' },
+            { name: 'Culture Fit', weight: 2, description: 'Alignment with company values and team dynamics' },
+            { name: 'Overall', weight: 1, description: 'Overall recommendation' },
+          ];
+          return { criteria };
+        }
+      } catch (error) {
+        this.logger.warn(`Could not fetch criteria from template: ${error.message}`);
+      }
+    }
+
+    // Default criteria for all roles (REC-020)
+    return {
+      criteria: [
+        { name: 'Technical Skills', weight: 3, description: 'Technical competency and problem-solving abilities' },
+        { name: 'Communication', weight: 2, description: 'Verbal and written communication skills' },
+        { name: 'Culture Fit', weight: 2, description: 'Alignment with company values and team dynamics' },
+        { name: 'Overall', weight: 1, description: 'Overall recommendation' },
+      ],
+    };
   }
 
   /**
@@ -486,24 +759,93 @@ export class RecruitmentService {
     return assessmentResult;
   }
 
-  async findInterviewsByApplication(applicationId: string): Promise<Interview[]> {
-    return this.interviewModel
-      .find({ applicationId: new Types.ObjectId(applicationId) })
+  async findAllInterviews(): Promise<Interview[]> {
+    const interviews = await this.interviewModel
+      .find({})
       .populate('panel')
+      .populate('applicationId')
+      .sort({ scheduledDate: -1 }) // Sort by date descending (newest first)
       .exec();
+
+    // Auto-update status based on scheduled date
+    const now = new Date();
+    for (const interview of interviews) {
+      const scheduledDate = new Date(interview.scheduledDate);
+      // Mark scheduled interviews as completed if date has passed
+      if (scheduledDate < now && interview.status === InterviewStatus.SCHEDULED) {
+        interview.status = InterviewStatus.COMPLETED;
+        await interview.save();
+      }
+      // Revert completed interviews back to scheduled if date is in the future
+      else if (scheduledDate > now && interview.status === InterviewStatus.COMPLETED) {
+        interview.status = InterviewStatus.SCHEDULED;
+        await interview.save();
+      }
+    }
+
+    return interviews;
   }
 
-  async findInterviewById(id: string): Promise<Interview> {
+  async findInterviewsByApplication(applicationId: string): Promise<Interview[]> {
+    const interviews = await this.interviewModel
+      .find({ applicationId: new Types.ObjectId(applicationId) })
+      .populate('panel')
+      .sort({ scheduledDate: -1 }) // Sort by date descending
+      .exec();
+
+    // Auto-update status based on scheduled date
+    const now = new Date();
+    for (const interview of interviews) {
+      const scheduledDate = new Date(interview.scheduledDate);
+      // Mark scheduled interviews as completed if date has passed
+      if (scheduledDate < now && interview.status === InterviewStatus.SCHEDULED) {
+        interview.status = InterviewStatus.COMPLETED;
+        await interview.save();
+      }
+      // Revert completed interviews back to scheduled if date is in the future
+      else if (scheduledDate > now && interview.status === InterviewStatus.COMPLETED) {
+        interview.status = InterviewStatus.SCHEDULED;
+        await interview.save();
+      }
+    }
+
+    return interviews;
+  }
+
+  async findInterviewById(id: string): Promise<any> {
     const interview = await this.interviewModel
       .findById(id)
-      .populate('applicationId')
       .populate('panel')
       .exec();
     
     if (!interview) {
       throw new NotFoundException(`Interview with ID ${id} not found`);
     }
-    return interview;
+
+    // Fetch all assessment results (feedback) for this interview
+    const assessmentResults = await this.assessmentResultModel
+      .find({ interviewId: interview._id })
+      .exec();
+
+    // Check if scheduled date has passed and update status if needed
+    const now = new Date();
+    const scheduledDate = new Date(interview.scheduledDate);
+    // Mark scheduled interviews as completed if date has passed
+    if (scheduledDate < now && interview.status === InterviewStatus.SCHEDULED) {
+      // Auto-update status for past interviews that are still marked as scheduled
+      interview.status = InterviewStatus.COMPLETED;
+      await interview.save();
+    }
+    // Revert completed interviews back to scheduled if date is in the future
+    else if (scheduledDate > now && interview.status === InterviewStatus.COMPLETED) {
+      interview.status = InterviewStatus.SCHEDULED;
+      await interview.save();
+    }
+
+    return {
+      ...interview.toObject(),
+      feedback: assessmentResults, // Include all feedback submissions
+    };
   }
 
   // ==========================================
@@ -532,8 +874,45 @@ export class RecruitmentService {
     return referral;
   }
 
+  async findAllReferrals(): Promise<Referral[]> {
+    try {
+      const referrals = await this.referralModel
+        .find()
+        .populate({
+          path: 'referringEmployeeId',
+          select: '_id name email', // Select specific fields if User model exists
+          strictPopulate: false, // Allow populate to not fail if path is not found
+        })
+        .populate({
+          path: 'candidateId',
+          select: '_id candidateNumber firstName lastName email', // Populate candidate info
+          strictPopulate: false,
+        })
+        .exec();
+      return referrals;
+    } catch (error: any) {
+      // Log the full error for debugging
+      this.logger.error(`Error fetching referrals: ${error?.message || error}`, error?.stack);
+      
+      // If populate fails (e.g., User model not registered, invalid ObjectId, etc.), return without populate
+      try {
+        const referralsWithoutPopulate = await this.referralModel.find().exec();
+        this.logger.debug(`Returning ${referralsWithoutPopulate.length} referrals without populate`);
+        return referralsWithoutPopulate;
+      } catch (fallbackError: any) {
+        this.logger.error(`Error fetching referrals without populate: ${fallbackError?.message || fallbackError}`);
+        throw new BadRequestException(`Failed to fetch referrals: ${fallbackError?.message || 'Unknown error'}`);
+      }
+    }
+  }
+
   async findReferralsByCandidate(candidateId: string): Promise<Referral[]> {
     try {
+      // Validate candidateId is a valid ObjectId
+      if (!Types.ObjectId.isValid(candidateId)) {
+        throw new BadRequestException(`Invalid candidateId: ${candidateId}`);
+      }
+
       const referrals = await this.referralModel
         .find({ candidateId: new Types.ObjectId(candidateId) })
         .populate({
@@ -541,19 +920,31 @@ export class RecruitmentService {
           select: '_id name email', // Select specific fields if User model exists
           strictPopulate: false, // Allow populate to not fail if path is not found
         })
+        .populate({
+          path: 'candidateId',
+          select: '_id candidateNumber firstName lastName email', // Populate candidate info
+          strictPopulate: false,
+        })
         .exec();
       return referrals;
-    } catch (error) {
-      // If populate fails (e.g., User model not registered), return without populate
-      // This is expected in standalone mode where User model may not exist
-      if (error.message?.includes('Schema hasn\'t been registered')) {
-        this.logger.debug(`User model not registered, returning referrals without populate`);
-      } else {
-        this.logger.error(`Error fetching referrals: ${error.message}`);
+    } catch (error: any) {
+      // Log the full error for debugging
+      this.logger.error(`Error fetching referrals by candidate: ${error?.message || error}`, error?.stack);
+      
+      // If populate fails (e.g., User model not registered, invalid ObjectId, etc.), return without populate
+      try {
+        if (!Types.ObjectId.isValid(candidateId)) {
+          throw new BadRequestException(`Invalid candidateId: ${candidateId}`);
       }
-      return await this.referralModel
+        const referralsWithoutPopulate = await this.referralModel
         .find({ candidateId: new Types.ObjectId(candidateId) })
         .exec();
+        this.logger.debug(`Returning ${referralsWithoutPopulate.length} referrals without populate`);
+        return referralsWithoutPopulate;
+      } catch (fallbackError: any) {
+        this.logger.error(`Error fetching referrals without populate: ${fallbackError?.message || fallbackError}`);
+        throw new BadRequestException(`Failed to fetch referrals: ${fallbackError?.message || 'Unknown error'}`);
+      }
     }
   }
 
@@ -569,11 +960,13 @@ export class RecruitmentService {
   async createOffer(dto: CreateOfferDto): Promise<Offer> {
     this.logger.log(`Creating offer for application: ${dto.applicationId}`);
     
-    // Validate application exists and is at offer stage
+    // Validate application exists
     const application = await this.findApplicationById(dto.applicationId);
     
-    if (application.status !== ApplicationStatus.OFFER) {
-      throw new BadRequestException('Application must be at offer stage');
+    // Allow creating offers for applications in process (not just "offer" status)
+    // The application status will be updated to "offer" when offer is created
+    if (application.status === ApplicationStatus.REJECTED || application.status === ApplicationStatus.HIRED) {
+      throw new BadRequestException('Cannot create offer for rejected or hired applications');
     }
 
     // BR26(a): Create customizable offer
@@ -588,7 +981,7 @@ export class RecruitmentService {
       insurances: dto.insurances,
       content: dto.content,
       role: dto.role,
-      deadline: dto.deadline,
+      deadline: typeof dto.deadline === 'string' ? new Date(dto.deadline) : dto.deadline,
       applicantResponse: OfferResponseStatus.PENDING,
       finalStatus: OfferFinalStatus.PENDING,
       approvers: [],
@@ -603,12 +996,21 @@ export class RecruitmentService {
   /**
    * Approve offer (REC-014)
    * BR26(b): System must support securing related parties' approval
+   * REC-027: Financial approval required before sending offers
    */
   async approveOffer(offerId: string, dto: ApproveOfferDto): Promise<Offer> {
     const offer = await this.offerModel.findById(offerId).exec();
     
     if (!offer) {
       throw new NotFoundException(`Offer with ID ${offerId} not found`);
+    }
+
+    // Check if this approver already approved
+    const existingApprover = offer.approvers.find(
+      a => a.employeeId.toString() === dto.employeeId && a.role === dto.role
+    );
+    if (existingApprover) {
+      throw new BadRequestException(`Approver ${dto.role} (${dto.employeeId}) has already provided approval for this offer`);
     }
 
     // Add approver
@@ -620,14 +1022,29 @@ export class RecruitmentService {
       comment: dto.comment,
     });
 
+    // Check for required approvals: HR Manager + Financial Approver (REC-027)
+    const hasHRApproval = offer.approvers.some(
+      a => (a.role === 'HR Manager' || a.role === 'hr_manager') && a.status === ApprovalStatus.APPROVED
+    );
+    const hasFinancialApproval = offer.approvers.some(
+      a => (a.role === 'Financial Approver' || a.role === 'Finance Manager' || a.role === 'finance_manager') && a.status === ApprovalStatus.APPROVED
+    );
+
     // Check if all required approvals received
     const allApproved = offer.approvers.every(
       approver => approver.status === ApprovalStatus.APPROVED
     );
 
-    if (allApproved && offer.approvers.length >= 2) { // Assume 2 approvals needed
+    // BR26(b): Require both HR and Financial approval before marking as fully approved
+    if (allApproved && hasHRApproval && hasFinancialApproval) {
       offer.finalStatus = OfferFinalStatus.APPROVED;
-      this.logger.log(`Offer ${offerId} fully approved - ready to send (BR26b)`);
+      this.logger.log(`Offer ${offerId} fully approved (HR + Financial) - ready to send (BR26b, REC-027)`);
+    } else if (hasHRApproval && !hasFinancialApproval) {
+      this.logger.log(`Offer ${offerId} has HR approval, awaiting Financial approval (REC-027)`);
+    } else if (hasFinancialApproval && !hasHRApproval) {
+      this.logger.log(`Offer ${offerId} has Financial approval, awaiting HR approval`);
+    } else {
+      this.logger.log(`Offer ${offerId} awaiting required approvals (HR Manager + Financial Approver)`);
     }
 
     await offer.save();
@@ -675,10 +1092,16 @@ export class RecruitmentService {
     return offer;
   }
 
+  async findAllOffers(): Promise<Offer[]> {
+    return this.offerModel
+      .find()
+      .populate('candidateId')
+      .exec();
+  }
+
   async findOfferById(id: string): Promise<Offer> {
     const offer = await this.offerModel
       .findById(id)
-      .populate('applicationId')
       .populate('candidateId')
       .exec();
     
@@ -710,10 +1133,57 @@ export class RecruitmentService {
       'system',
     );
 
-    // BR36: Send automated email (would integrate with email service)
-    this.logger.log(`Rejection notification sent to candidate (BR36)`);
+    // BR36: Send automated email
+    if (this.notificationsService) {
+      try {
+        const candidateId = application.candidateId.toString();
+        
+        // Get candidate information
+        let candidateEmail: string = '';
+        let candidateName: string = 'Candidate';
+
+        if (typeof (application as any).candidateId === 'object' && (application as any).candidateId) {
+          const candidate = (application as any).candidateId;
+          candidateEmail = candidate.personalEmail || candidate.email || '';
+          candidateName = candidate.firstName && candidate.lastName 
+            ? `${candidate.firstName} ${candidate.lastName}`
+            : candidate.fullName || 'Candidate';
+        } else {
+          // Fetch candidate directly from Candidate model
+          try {
+            const candidate = await this.candidateModel.findById(candidateId).exec();
+            if (candidate) {
+              candidateEmail = candidate.personalEmail || '';
+              candidateName = candidate.firstName && candidate.lastName
+                ? `${candidate.firstName} ${candidate.lastName}`
+                : candidate.fullName || 'Candidate';
+            }
+          } catch (error) {
+            this.logger.warn(`Could not fetch candidate details: ${error.message}`);
+          }
+        }
+
+        if (candidateEmail) {
+          await this.notificationsService.sendApplicationRejection(
+            candidateId,
+            candidateEmail,
+            candidateName,
+            applicationId,
+            template.reason,
+            template.body,
+          );
+          this.logger.log(`Rejection notification sent to candidate (BR36)`);
+        } else {
+          this.logger.warn(`No email found for candidate. Rejection notification not sent.`);
+        }
+      } catch (error) {
+        this.logger.error(`Failed to send rejection notification: ${error.message}`, error.stack);
+      }
+    } else {
+      this.logger.warn('NotificationsService not available. Rejection notification not sent.');
+    }
     
-    // BR37: Log communication
+    // BR37: Log communication (handled by NotificationsService)
     this.logger.log(`Rejection communication logged (BR37)`);
   }
 
@@ -801,8 +1271,67 @@ export class RecruitmentService {
     comment?: string,
   ): Promise<void> {
     // BR11, BR27, BR36: Trigger notification service
-    // In real implementation, would emit event or call notification service
-    this.logger.log(`Status change notification triggered: ${oldStatus} -> ${application.status} (BR11, BR27, BR36)`);
+    if (!this.notificationsService) {
+      this.logger.warn('NotificationsService not available. Skipping notification.');
+      return;
+    }
+
+    try {
+      // Get candidate information
+      const candidateId = application.candidateId.toString();
+      
+      // Try to get candidate details from populated application or fetch separately
+      let candidateEmail: string;
+      let candidateName: string;
+
+      if (typeof (application as any).candidateId === 'object' && (application as any).candidateId) {
+        const candidate = (application as any).candidateId;
+        candidateEmail = candidate.personalEmail || candidate.email || '';
+        candidateName = candidate.firstName && candidate.lastName 
+          ? `${candidate.firstName} ${candidate.lastName}`
+          : candidate.fullName || 'Candidate';
+        } else {
+          // Fetch candidate directly from Candidate model
+          try {
+            const candidate = await this.candidateModel.findById(candidateId).exec();
+            if (candidate) {
+              candidateEmail = candidate.personalEmail || '';
+              candidateName = candidate.firstName && candidate.lastName
+                ? `${candidate.firstName} ${candidate.lastName}`
+                : candidate.fullName || 'Candidate';
+            } else {
+              this.logger.warn(`Candidate ${candidateId} not found. Cannot send notification.`);
+              return;
+            }
+          } catch (error) {
+            this.logger.warn(`Could not fetch candidate details: ${error.message}`);
+            return; // Can't send notification without email
+          }
+        }
+
+      if (!candidateEmail) {
+        this.logger.warn(`No email found for candidate ${candidateId}. Skipping notification.`);
+        return;
+      }
+
+      // Send notification
+      const applicationId = (application as any)._id?.toString() || String((application as any).id) || '';
+      await this.notificationsService.sendApplicationStatusUpdate(
+        candidateId,
+        candidateEmail,
+        candidateName,
+        applicationId,
+        oldStatus,
+        application.status,
+        application.currentStage,
+        comment,
+      );
+
+      this.logger.log(`Status change notification sent: ${oldStatus} -> ${application.status} (BR11, BR27, BR36)`);
+    } catch (error) {
+      this.logger.error(`Failed to send status change notification: ${error.message}`, error.stack);
+      // Don't throw - notification failure shouldn't break the status update
+    }
   }
 
   private async sendInterviewInvites(
@@ -810,7 +1339,75 @@ export class RecruitmentService {
     recipient: 'panel' | 'candidate',
   ): Promise<void> {
     // BR19(c), BR19(d): Send calendar invites and notifications
-    this.logger.log(`Interview invite sent to ${recipient} (BR19)`);
+    if (!this.notificationsService) {
+      this.logger.warn('NotificationsService not available. Skipping interview invite.');
+      return;
+    }
+
+    try {
+      if (recipient === 'candidate') {
+        // Get application to find candidate
+        const application = await this.applicationModel
+          .findById(interview.applicationId)
+          .populate('candidateId')
+          .exec();
+
+        if (!application) {
+          this.logger.warn(`Application ${interview.applicationId} not found for interview invite`);
+          return;
+        }
+
+        const candidateId = application.candidateId.toString();
+        let candidateEmail: string;
+        let candidateName: string;
+
+        if (typeof (application as any).candidateId === 'object' && (application as any).candidateId) {
+          const candidate = (application as any).candidateId;
+          candidateEmail = candidate.personalEmail || candidate.email || '';
+          candidateName = candidate.firstName && candidate.lastName 
+            ? `${candidate.firstName} ${candidate.lastName}`
+            : candidate.fullName || 'Candidate';
+        } else {
+          // Fetch candidate directly from Candidate model
+          try {
+            const candidate = await this.candidateModel.findById(candidateId).exec();
+            if (candidate) {
+              candidateEmail = candidate.personalEmail || '';
+              candidateName = candidate.firstName && candidate.lastName
+                ? `${candidate.firstName} ${candidate.lastName}`
+                : candidate.fullName || 'Candidate';
+            } else {
+              this.logger.warn(`Candidate ${candidateId} not found. Cannot send interview invite.`);
+              return;
+            }
+          } catch (error) {
+            this.logger.warn(`Could not fetch candidate details: ${error.message}`);
+            return;
+          }
+        }
+
+        if (candidateEmail) {
+          const interviewId = (interview as any)._id?.toString() || String((interview as any).id) || '';
+          await this.notificationsService.sendInterviewScheduled(
+            candidateId,
+            candidateEmail,
+            candidateName,
+            interviewId,
+            interview.scheduledDate,
+            interview.method,
+            interview.videoLink,
+          );
+          this.logger.log(`Interview invite sent to candidate (BR19)`);
+        } else {
+          this.logger.warn(`No email found for candidate. Interview invite not sent.`);
+        }
+      } else {
+        // Panel member invites would go here
+        this.logger.log(`Panel member invites not yet implemented (BR19)`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send interview invite: ${error.message}`, error.stack);
+    }
   }
 
   // ==========================================
@@ -875,8 +1472,29 @@ export class RecruitmentService {
       }
     }
 
+    // Create contract from signed offer
+    let contractId: Types.ObjectId | undefined;
+    if (employeeId) {
+      try {
+        const contract = new this.contractModel({
+          offerId: (offer as any)._id || new Types.ObjectId(),
+          acceptanceDate: offer.candidateSignedAt || new Date(),
+          grossSalary: offer.grossSalary,
+          signingBonus: offer.signingBonus,
+          role: role,
+          employeeSignedAt: offer.candidateSignedAt || new Date(),
+          // Contract document will be uploaded separately by candidate
+        });
+        await contract.save();
+        contractId = contract._id as Types.ObjectId;
+        this.logger.log(`Contract created: ${contractId}`);
+      } catch (error) {
+        this.logger.error(`Failed to create contract: ${error.message}`);
+      }
+    }
+
     // Trigger onboarding workflow (if onboarding service available)
-    if (this.onboardingService) {
+    if (this.onboardingService && employeeId) {
       try {
         const offerId = (offer as any)._id?.toString() || offer.candidateId.toString();
         const onboardingResult = await this.onboardingService.triggerOnboarding(
@@ -886,16 +1504,24 @@ export class RecruitmentService {
             role: role,
             department: department,
             grossSalary: offer.grossSalary,
+            signingBonus: offer.signingBonus,
             startDate: new Date(), // In real implementation, this would come from offer
+            employeeId: employeeId,
+            contractId: contractId?.toString(),
           },
         );
         this.logger.log(`Onboarding workflow triggered: ${onboardingResult.onboardingId}`);
         this.logger.log(`Onboarding tasks created: ${onboardingResult.tasks.length}`);
+        this.logger.log(`Contract ID: ${onboardingResult.contractId}`);
       } catch (error) {
         this.logger.error(`Failed to trigger onboarding: ${error.message}`);
       }
     } else {
-      this.logger.warn('Onboarding service not available - onboarding not triggered');
+      if (!employeeId) {
+        this.logger.warn('Employee ID not available - onboarding not triggered');
+      } else {
+        this.logger.warn('Onboarding service not available - onboarding not triggered');
+      }
     }
   }
 
@@ -972,5 +1598,74 @@ export class RecruitmentService {
       totalReferrals: referrals.length,
       referralPercentage: (referrals.length / applications.length) * 100,
     };
+  }
+
+  /**
+   * Withdraw consent for data processing (REC-028)
+   * BR28: Consent withdrawal support for GDPR compliance
+   */
+  async withdrawConsent(candidateId: string, applicationId: string): Promise<void> {
+    this.logger.log(`Withdrawing consent for candidate ${candidateId}, application ${applicationId}`);
+    
+    // Get candidate details
+    const candidate = await this.candidateModel.findById(candidateId).exec();
+    const candidateEmail = candidate?.personalEmail || (candidate as any)?.email || 'unknown@example.com';
+    const candidateName = candidate?.firstName && candidate?.lastName
+      ? `${candidate.firstName} ${candidate.lastName}`
+      : (candidate as any)?.fullName || 'Candidate';
+
+    // Log consent withdrawal
+    if (this.notificationsService) {
+      await this.notificationsService.logNotification({
+        type: NotificationType.CONSENT_WITHDRAWN,
+        channel: NotificationChannel.IN_APP,
+        recipientId: candidateId,
+        recipientEmail: candidateEmail,
+        recipientName: candidateName,
+        subject: 'Consent Withdrawal Confirmation',
+        content: `Your consent for data processing has been withdrawn for application ${applicationId}. Your data will be anonymized per GDPR requirements.`,
+        metadata: { applicationId },
+        relatedEntityId: applicationId,
+        relatedEntityType: 'application',
+      });
+    }
+
+    // In a real implementation, you would anonymize the candidate data here
+    // For now, we just log the withdrawal
+    this.logger.log(`Consent withdrawn for application ${applicationId}`);
+  }
+
+  /**
+   * Get consent history for a candidate (REC-028)
+   * BR28: Consent history tracking for GDPR compliance
+   */
+  async getConsentHistory(candidateId: string): Promise<any[]> {
+    this.logger.log(`Fetching consent history for candidate ${candidateId}`);
+    
+    // Query NotificationLog directly via Mongoose
+    try {
+      const mongoose = await import('mongoose');
+      const connection = mongoose.connection;
+      const NotificationLogCollection = connection.collection('notificationlogs');
+      
+      const notifications = await NotificationLogCollection
+        .find({
+          recipientId: new Types.ObjectId(candidateId),
+          type: { $in: ['consent_given', 'consent_withdrawn'] },
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      return notifications.map((notif: any) => ({
+        type: notif.type,
+        timestamp: notif.createdAt || notif.timestamp,
+        applicationId: notif.relatedEntityId?.toString(),
+        consentGiven: notif.type === 'consent_given',
+        consentWithdrawn: notif.type === 'consent_withdrawn',
+      }));
+    } catch (error) {
+      this.logger.error(`Error fetching consent history: ${error.message}`);
+      return [];
+    }
   }
 }

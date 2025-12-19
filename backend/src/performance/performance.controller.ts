@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ADMIN_ROLES, EMPLOYEE_ROLES, HR_ROLES, MANAGER_ROLES } from '../common/constants/role-groups';
-
+import { NotFoundException } from '@nestjs/common';
 
 @Controller('performance')
 export class PerformanceController {
@@ -126,7 +126,7 @@ export class PerformanceController {
 
   @Post('appraisals')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(...MANAGER_ROLES, ...ADMIN_ROLES)
+  @Roles(...MANAGER_ROLES) // ✅ added HR 
   createAppraisal(@Body() dto: CreateAppraisalRecordDto, @Req() req: any) {
     const managerProfileId = req.user.id;
     return this.performanceService.createAppraisal(dto, managerProfileId);
@@ -134,7 +134,7 @@ export class PerformanceController {
 
   @Patch('appraisals/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(...MANAGER_ROLES, ...ADMIN_ROLES)
+  @Roles(...MANAGER_ROLES) // ✅ added HR
   updateAppraisal(
     @Param('id') id: string,
     @Body() dto: UpdateAppraisalRecordDto,
@@ -147,7 +147,7 @@ export class PerformanceController {
 
   @Patch('appraisals/:id/status')
    @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(...MANAGER_ROLES, ...ADMIN_ROLES)
+  @Roles(...MANAGER_ROLES) // ✅ added HR
   updateAppraisalStatus(
     @Param('id') id: string,
     @Body() dto: UpdateAppraisalStatusDto,
@@ -160,7 +160,7 @@ export class PerformanceController {
 
   @Patch('appraisals/:id/publish')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(...HR_ROLES, ...ADMIN_ROLES)
+  @Roles( ...HR_ROLES, ...ADMIN_ROLES) // ✅ added HR
   publishAppraisal(
     @Param('id') id: string,
     @Body() dto: UpdateAppraisalStatusDto,
@@ -169,7 +169,12 @@ export class PerformanceController {
     const hrEmployeeProfileId = req.user.id;
     return this.performanceService.publishAppraisal(id, hrEmployeeProfileId, dto);
   }
-
+  @Get('appraisals/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...HR_ROLES, ...MANAGER_ROLES, ...ADMIN_ROLES)
+  getAppraisalById(@Param('id') id: string) {
+    return this.performanceService.getAppraisalById(id);
+  }
   @Get('cycles/:cycleId/appraisals')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...HR_ROLES, ...MANAGER_ROLES, ...ADMIN_ROLES)
@@ -250,25 +255,34 @@ deleteDispute(@Param('id') id: string) {
   }
 
   @Get('disputes')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(...HR_ROLES, ...ADMIN_ROLES)
-  listDisputes(@Query('status') status?: string) {
-    return this.performanceService.listDisputes(status);
-  }
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(...HR_ROLES, ...MANAGER_ROLES, ...ADMIN_ROLES)
+listDisputes(@Query('status') status?: string) {
+  return this.performanceService.listDisputes(status);
+}
+
 
 
 @Patch('disputes/:id/resolve')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...HR_ROLES, ...ADMIN_ROLES)
-resolveDispute(@Param('id') id: string, @Body() dto: ResolveDisputeDto, @Req() req: any) {
+resolveDispute(
+  @Param('id') id: string,
+  @Body() dto: ResolveDisputeDto,
+  @Req() req: any
+) {
   const hrEmployeeProfileId = req.user.id;
   return this.performanceService.resolveDispute(id, dto, hrEmployeeProfileId);
 }
+
 @Get('disputes/:id')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...HR_ROLES, ...MANAGER_ROLES, ...ADMIN_ROLES, ...EMPLOYEE_ROLES)
-getDisputeById(@Param('id') id: string) {
-  return this.performanceService.getDisputeById(id);
+async getDisputeById(@Param('id') id: string) {
+  const dispute = await this.performanceService.getDisputeById(id);
+  if (!dispute) {
+    throw new NotFoundException('Dispute not found');
+  }
+  return dispute;
 }
-
 }

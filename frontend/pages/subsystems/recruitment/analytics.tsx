@@ -1,4 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react';
+import Link from 'next/link';
 import apiClient from '../../../lib/apiClient';
 import {
   AnalyticsData,
@@ -85,8 +86,18 @@ export default function Analytics() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6 py-12">
       <div className="max-w-7xl mx-auto space-y-8">
         <header className="space-y-3">
-          <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Recruitment</p>
-          <h1 className="text-4xl lg:text-5xl font-semibold">Analytics</h1>
+          <div className="flex items-center justify-between">
+            <div className="space-y-3">
+              <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Recruitment</p>
+              <h1 className="text-4xl lg:text-5xl font-semibold">Analytics</h1>
+            </div>
+            <Link
+              href="/subsystems/recruitment"
+              className="text-blue-300 hover:text-blue-200 underline text-sm self-start"
+            >
+              ← Back
+            </Link>
+          </div>
           <p className="text-lg text-slate-200/80">
             View recruitment metrics, conversion rates, and time-to-hire statistics.
           </p>
@@ -194,7 +205,9 @@ export default function Analytics() {
                   Average Time to Hire
                 </h3>
                 <p className="text-3xl font-bold">
-                  {analytics.averageTimeToHire.toFixed(1)} days
+                  {analytics.averageTimeToHire != null 
+                    ? analytics.averageTimeToHire.toFixed(1) 
+                    : '0.0'} days
                 </p>
               </div>
 
@@ -210,7 +223,9 @@ export default function Analytics() {
                   Referral Percentage
                 </h3>
                 <p className="text-3xl font-bold">
-                  {analytics.referralStats.referralPercentage.toFixed(1)}%
+                  {analytics.referralStats?.referralPercentage != null 
+                    ? analytics.referralStats.referralPercentage.toFixed(1) 
+                    : '0.0'}%
                 </p>
               </div>
             </div>

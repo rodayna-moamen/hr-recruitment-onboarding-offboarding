@@ -1,5 +1,4 @@
-import { IsMongoId, IsNumber, IsArray, IsString, IsOptional, IsDate, IsNotEmpty, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsMongoId, IsNumber, IsArray, IsString, IsOptional, IsDateString, IsNotEmpty, Min } from 'class-validator';
 
 export class CreateOfferDto {
   @IsMongoId()
@@ -42,8 +41,8 @@ export class CreateOfferDto {
   @IsNotEmpty()
   role: string;
 
-  @IsDate()
-  @Type(() => Date)
-  deadline: Date;
+  @IsDateString()
+  @IsNotEmpty()
+  deadline: string; // Accept ISO 8601 string format
 }
 

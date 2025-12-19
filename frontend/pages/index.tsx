@@ -1,28 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from "react";
+import type { JSX } from "react";
+import Link from "next/link";
 import {
   Users,
   Network,
   Target,
   Clock,
   UserPlus,
-  LogIn,
   Calendar,
   DollarSign,
   Menu,
   X,
   ChevronRight,
-  Sparkles
-} from 'lucide-react';
+  Sparkles,
+} from "lucide-react";
 
-// MODULE DATA WITH ROUTES
+/* =====================================================
+   MODULES (FULL SYSTEM – LOGGED IN)
+===================================================== */
 const modules = [
   {
     name: "Employee Profile",
     desc: "Centralized employee records, documents, contracts, and master data.",
     icon: <Users className="w-8 h-8" />,
     gradient: "from-blue-500 to-cyan-500",
-    route: "/subsystems/employee-profile",
+    route: "/dashboard",
   },
   {
     name: "Leaves Management",
@@ -68,285 +70,177 @@ const modules = [
   },
 ];
 
-export default function Home() {
+export default function Home(): JSX.Element {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [applyMode, setApplyMode] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userType, setUserType] = useState<string | null>(null);
 
+  /* =====================================================
+     CHECK LOGIN
+  ===================================================== */
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handler);
-    return () => window.removeEventListener("scroll", handler);
+    const token = localStorage.getItem("token");
+    const storedUserType = localStorage.getItem("userType");
+
+    setIsLoggedIn(!!token);
+    setUserType(storedUserType);
   }, []);
 
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-    setMobileMenuOpen(false);
-  };
+  /* =====================================================
+     LOGOUT
+  ===================================================== */
+  function handleLogout() {
+    localStorage.clear();
+    window.location.href = "/";
+  }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white overflow-hidden">
+  /* =====================================================
+     ✅ ONLY FIX — FILTER MODULES BY USER TYPE
+  ===================================================== */
+  const visibleModules =
+    userType === "CANDIDATE"
+      ? modules.filter((m) => m.name === "Recruitment")
+      : modules;
 
-      {/* NAVBAR */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "bg-slate-950/80 backdrop-blur-xl shadow-2xl shadow-blue-900/20" : "bg-transparent"
-      }`}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex justify-between items-center py-5">
+  /* =====================================================
+     GUEST PAGE (NOT LOGGED IN)
+  ===================================================== */
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white">
 
-            {/* LOGO */}
-            <div className="flex items-center gap-3 cursor-pointer">
+        {/* NAVBAR */}
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/10">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
+            <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl blur-md" />
                 <div className="relative bg-gradient-to-br from-blue-600 to-cyan-600 p-2.5 rounded-xl">
                   <Sparkles className="w-6 h-6" />
                 </div>
               </div>
-              <h1 className="text-2xl bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
+              <h1 className="text-2xl bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
                 HR System
               </h1>
             </div>
 
-            {/* DESKTOP NAV */}
-            <div className="hidden lg:flex items-center gap-8">
-              {["home", "modules", "about", "footer"].map((item) => (
-                <button
-                  key={item}
-                  onClick={() => scrollTo(item)}
-                  className="text-gray-300 hover:text-white relative group"
-                >
-                  {item[0].toUpperCase() + item.slice(1)}
-                  <span className="absolute left-0 bottom-0 w-0 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 group-hover:w-full transition-all"></span>
-                </button>
-              ))}
-            </div>
-
-            {/* LOGIN BUTTON */}
-            <div className="hidden lg:block">
-              <button className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl blur-sm group-hover:blur-md transition-all" />
-                <div className="relative px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl flex items-center gap-2">
-                  Login
-                  <ChevronRight className="w-4 h-4" />
-                </div>
+            <div className="hidden lg:flex gap-3">
+              <button
+                onClick={() => setApplyMode(true)}
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-cyan-500 rounded-xl"
+              >
+                Apply
               </button>
+
+              <Link href="/login">
+                <button className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl">
+                  Login
+                </button>
+              </Link>
             </div>
 
-            {/* MOBILE MENU BUTTON */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden text-gray-300"
+              className="lg:hidden"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {mobileMenuOpen ? <X /> : <Menu />}
             </button>
           </div>
-        </div>
+        </nav>
 
-        {/* MOBILE NAV */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden bg-slate-950/95 backdrop-blur-xl border-t border-white/10 px-6 py-4 space-y-4">
-            {["home", "modules", "about", "footer"].map((item) => (
-              <button
-                key={item}
-                onClick={() => scrollTo(item)}
-                className="block w-full text-left text-gray-300 hover:text-white py-2"
-              >
-                {item[0].toUpperCase() + item.slice(1)}
-              </button>
-            ))}
-            <button className="w-full px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl">
-              Login
-            </button>
-          </div>
-        )}
-      </nav>
+        {/* CONTENT */}
+        <main className="pt-40 px-6 max-w-5xl mx-auto text-center">
+          {!applyMode ? (
+            <>
+              <h2 className="text-6xl font-light mb-6">
+                Welcome to the <br />
+                <span className="text-blue-300">HR System</span>
+              </h2>
 
-      {/* HERO SECTION */}
-      <header id="home" className="pt-32 pb-20 lg:pt-40 lg:pb-32 px-6">
-        <div className="max-w-7xl mx-auto text-center relative z-10">
+              <p className="text-xl text-gray-300 mb-10">
+                Apply for jobs or login if you are an employee.
+              </p>
 
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 mb-8">
-            <span className="h-2 w-2 relative flex">
-              <span className="absolute inset-0 animate-ping bg-cyan-400 rounded-full opacity-75" />
-              <span className="relative bg-cyan-500 rounded-full h-2 w-2" />
-            </span>
-            <span className="text-sm text-cyan-400">Next Generation HR Platform</span>
-          </div>
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => setApplyMode(true)}
+                  className="px-8 py-4 bg-gradient-to-r from-emerald-600 to-cyan-500 rounded-2xl"
+                >
+                  Apply Now
+                </button>
 
-          <h2 className="text-6xl lg:text-7xl font-light mb-6 text-white leading-tight">
-            HR Management
-            <br />
-            <span className="text-blue-300">Platform</span>
-          </h2>
-
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto mb-12">
-            A complete system covering employee profiles, attendance, payroll,
-            leaves, performance, recruitment, onboarding, and more — all powered by AI.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="relative group">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl blur-lg opacity-75 group-hover:blur-xl transition-all"></div>
-              <div className="relative px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl flex items-center gap-2">
-                Get Started
-                <ChevronRight className="w-5 h-5" />
+                <Link href="/login">
+                  <button className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl">
+                    Login
+                  </button>
+                </Link>
               </div>
-            </button>
+            </>
+          ) : (
+            <>
+              <h2 className="text-5xl mb-6">Recruitment</h2>
+              <p className="text-gray-400 mb-10">Apply for open positions.</p>
 
-            <button
-              onClick={() => scrollTo("modules")}
-              className="px-8 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all flex items-center gap-2"
-            >
-              Explore Modules
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 mt-20 max-w-4xl mx-auto">
-            {[
-              { value: '7', label: 'Integrated Modules' },
-              { value: '99.9%', label: 'Uptime SLA' },
-              { value: '24/7', label: 'Support' },
-              { value: 'AI', label: 'Powered System' },
-            ].map((s, i) => (
-              <div key={i} className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-2xl blur-xl group-hover:blur-2xl" />
-                <div className="relative bg-white/5 border border-white/10 p-6 rounded-2xl">
-                  <div className="text-3xl text-blue-300">{s.value}</div>
-                  <div className="text-sm text-gray-400">{s.label}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-        </div>
-      </header>
-
-      {/* MODULES GRID WITH LINKS */}
-      <section id="modules" className="py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-
-          <div className="text-center mb-16">
-            <h3 className="text-4xl lg:text-5xl mb-4 text-white">HR System Modules</h3>
-            <p className="text-gray-400 max-w-2xl mx-auto">
-              Comprehensive suite of tools designed to streamline every aspect of HR management
-            </p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {modules.map((m) => (
-              <Link key={m.name} href={m.route}>
-                <div className="group relative cursor-pointer">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${m.gradient} blur-xl rounded-3xl opacity-0 group-hover:opacity-30 transition-all`} />
-
-                  <div className="relative bg-white/5 border border-white/10 backdrop-blur-xl p-6 
-                                  rounded-3xl hover:border-white/20 transition-all hover:-translate-y-2">
-
-                    <div className="relative mb-4">
-                      <div className={`absolute inset-0 bg-gradient-to-br ${m.gradient} rounded-2xl blur-md opacity-50`} />
-                      <div className={`relative bg-gradient-to-br ${m.gradient} p-3 rounded-2xl`}>
-                        {m.icon}
-                      </div>
-                    </div>
-
-                    <h4 className="text-xl mb-3 text-white">{m.name}</h4>
-                    <p className="text-gray-400 text-sm leading-relaxed">{m.desc}</p>
-
-                    <div className="mt-4 flex items-center gap-2 text-sm text-cyan-400 opacity-0 group-hover:opacity-100 transition-all">
-                      Open Module
-                      <ChevronRight className="w-4 h-4" />
-                    </div>
-
-                  </div>
-                </div>
+              <Link href="/register">
+                <button className="px-8 py-4 bg-gradient-to-r from-emerald-600 to-cyan-500 rounded-2xl">
+                  Apply as Candidate
+                </button>
               </Link>
-            ))}
-          </div>
 
-        </div>
-      </section>
+              <button
+                onClick={() => setApplyMode(false)}
+                className="block mt-6 text-gray-400 hover:text-white"
+              >
+                ← Back
+              </button>
+            </>
+          )}
+        </main>
+      </div>
+    );
+  }
 
-      {/* ABOUT SECTION */}
-      <section id="about" className="py-20 px-6">
-        <div className="max-w-7xl mx-auto">
+  /* =====================================================
+     LOGGED IN PAGE
+  ===================================================== */
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white">
 
-          <div className="text-center mb-16">
-            <h3 className="text-4xl lg:text-5xl mb-4 text-white">Why This System?</h3>
-            <p className="text-gray-400 max-w-2xl mx-auto">
-              Built for the future of work with intelligent automation
-            </p>
-          </div>
+      {/* LOGOUT BUTTON */}
+      <div className="fixed top-6 right-6 z-50">
+        <button
+          onClick={handleLogout}
+          className="px-5 py-2 bg-red-600 hover:bg-red-700 rounded-xl"
+        >
+          Logout
+        </button>
+      </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            {[  
-              {
-                title: 'Unified Experience',
-                desc: 'All subsystems share a single source of truth for maximum consistency and accuracy.',
-                icon: <Network className="w-6 h-6" />,
-                gradient: 'from-blue-500 to-cyan-500'
-              },
-              {
-                title: 'Modern Interface',
-                desc: 'Intuitive UI ensures fast learning and seamless navigation across roles.',
-                icon: <Sparkles className="w-6 h-6" />,
-                gradient: 'from-cyan-500 to-teal-500'
-              },
-              {
-                title: 'Modular Architecture',
-                desc: 'Subsystems are independently developed yet fully integrated.',
-                icon: <Target className="w-6 h-6" />,
-                gradient: 'from-indigo-500 to-purple-500'
-              }
-            ].map((f, i) => (
-              <div key={i} className="group relative">
-                <div className={`absolute inset-0 bg-gradient-to-br ${f.gradient} blur-xl rounded-3xl opacity-0 group-hover:opacity-20 transition-all`} />
-                <div className="relative bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl hover:border-white/20 transition-all">
+      <main className="pt-32 px-6 max-w-7xl mx-auto">
+        <h2 className="text-5xl mb-12 text-center">HR System Modules</h2>
 
-                  <div className={`p-3 mb-6 rounded-2xl text-white bg-gradient-to-br ${f.gradient}`}>
-                    {f.icon}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {visibleModules.map((m) => (
+            <Link key={m.name} href={m.route}>
+              <div className="group relative cursor-pointer">
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${m.gradient} blur-xl opacity-20 rounded-3xl`}
+                />
+                <div className="relative bg-white/5 border border-white/10 p-6 rounded-3xl hover:-translate-y-2 transition-all">
+                  <div
+                    className={`p-3 mb-4 rounded-2xl bg-gradient-to-br ${m.gradient}`}
+                  >
+                    {m.icon}
                   </div>
-
-                  <h4 className="text-2xl mb-4 text-white">{f.title}</h4>
-                  <p className="text-gray-400 leading-relaxed">{f.desc}</p>
-
+                  <h4 className="text-xl mb-2">{m.name}</h4>
+                  <p className="text-gray-400 text-sm">{m.desc}</p>
                 </div>
               </div>
-            ))}
-          </div>
-
+            </Link>
+          ))}
         </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer id="footer" className="py-12 px-6 border-t border-white/10">
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-6">
-
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl blur-md" />
-              <div className="relative bg-gradient-to-br from-blue-600 to-cyan-600 p-2.5 rounded-xl">
-                <Sparkles className="w-5 h-5" />
-              </div>
-            </div>
-            <span className="text-xl bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              HR System
-            </span>
-          </div>
-
-          <p className="text-gray-400 text-center">
-            © 2025 GIU HR Management System — All rights reserved.
-          </p>
-
-          <div className="flex gap-4">
-            {["Privacy", "Terms", "Support"].map((t) => (
-              <button key={t} className="text-gray-400 hover:text-white">
-                {t}
-              </button>
-            ))}
-          </div>
-
-        </div>
-      </footer>
-
+      </main>
     </div>
   );
 }

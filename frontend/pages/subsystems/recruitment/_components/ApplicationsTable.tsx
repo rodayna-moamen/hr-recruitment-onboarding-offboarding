@@ -1,5 +1,5 @@
 import React from 'react';
-import { Application, ApplicationStage, ApplicationStatus } from '../../types/recruitment';
+import { Application, ApplicationStage, ApplicationStatus } from '../../../../types/recruitment';
 
 export interface ApplicationsTableProps {
   apps: Application[];
@@ -29,28 +29,51 @@ const statusLabels: Record<string, string> = {
 
 export const ApplicationsTable: React.FC<ApplicationsTableProps> = ({
   apps, loading, error, onView, filterStage, setFilterStage, filterStatus, setFilterStatus }) => {
-  if (loading) return <div className="py-10 text-center">Loading applications...</div>;
-  if (error) return <div className="py-10 text-center text-red-500">{error}</div>;
-  if (!apps.length) return <div className="py-10 text-center">No applications found.</div>;
-
+  
   return (
     <div>
-      <div className="flex gap-4 mb-2">
-        <select value={filterStage} onChange={e => setFilterStage(e.target.value)}
-                className="px-2 py-1 rounded bg-slate-800 text-slate-100">
-          <option value="">All Stages</option>
-          {Object.entries(stageLabels).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                className="px-2 py-1 rounded bg-slate-800 text-slate-100">
-          <option value="">All Status</option>
-          {Object.entries(statusLabels).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
+      {/* Filters - Always visible */}
+      <div className="grid gap-4 md:grid-cols-2 mb-6">
+        <label className="space-y-2">
+          <span className="text-sm text-slate-100">Stage</span>
+          <select 
+            value={filterStage} 
+            onChange={e => setFilterStage(e.target.value)}
+            className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Stages</option>
+            {Object.entries(stageLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-2">
+          <span className="text-sm text-slate-100">Status</span>
+          <select 
+            value={filterStatus} 
+            onChange={e => setFilterStatus(e.target.value)}
+            className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Status</option>
+            {Object.entries(statusLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </label>
       </div>
+
+      {/* Loading/Error/Empty States */}
+      {loading && <div className="py-10 text-center">Loading applications...</div>}
+      {error && <div className="py-10 text-center text-red-500">{error}</div>}
+      {!loading && !error && !apps.length && (
+        <div className="py-10 text-center">
+          <p className="text-slate-300 mb-2">No applications found.</p>
+          <p className="text-sm text-slate-400">Try adjusting your filters above.</p>
+        </div>
+      )}
+
+      {/* Table - Only show when there's data */}
+      {!loading && !error && apps.length > 0 && (
       <div className="overflow-x-auto rounded bg-white/5 mt-2">
         <table className="min-w-full text-sm text-gray-100">
           <thead>
@@ -67,8 +90,12 @@ export const ApplicationsTable: React.FC<ApplicationsTableProps> = ({
           <tbody>
             {apps.map(app => (
               <tr key={app._id} className="border-b border-slate-800 hover:bg-slate-900/60">
-                <td className="p-3 font-mono">{app._id}</td>
-                <td className="p-3">{app.candidateId}</td>
+                <td className="p-3 font-mono text-xs">{app._id.slice(-8)}</td>
+                <td className="p-3 font-mono text-xs">
+                  {typeof app.candidateId === 'object' && app.candidateId
+                    ? (app.candidateId as any)?._id || (app.candidateId as any)?.candidateNumber || String(app.candidateId)
+                    : app.candidateId || 'N/A'}
+                </td>
                 <td className="p-3">{
                   typeof app.requisitionId === 'string' ? app.requisitionId : app.requisitionId?.requisitionId || '-'
                 }</td>
@@ -91,6 +118,10 @@ export const ApplicationsTable: React.FC<ApplicationsTableProps> = ({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 };
+
+// No default export - this is a component, not a page
+

@@ -126,6 +126,16 @@ export type Offer = {
   updatedAt?: string;
 };
 
+export type Referral = {
+  _id: string;
+  referringEmployeeId: string;
+  candidateId: string;
+  role?: string;
+  level?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type AnalyticsData = {
   totalApplications: number;
   byStatus: Record<string, number>;

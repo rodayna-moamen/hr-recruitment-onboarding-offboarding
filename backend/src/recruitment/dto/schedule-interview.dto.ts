@@ -1,19 +1,19 @@
-import { IsMongoId, IsEnum, IsDate, IsArray, IsOptional, IsString, IsNotEmpty } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsMongoId, IsEnum, IsDateString, IsArray, IsOptional, IsString, IsNotEmpty } from 'class-validator';
 import { ApplicationStage } from '../enums/application-stage.enum';
 import { InterviewMethod } from '../enums/interview-method.enum';
 
 export class ScheduleInterviewDto {
   @IsMongoId()
+  @IsNotEmpty()
   applicationId: string;
 
   @IsEnum(ApplicationStage)
   @IsNotEmpty()
   stage: ApplicationStage;
 
-  @IsDate()
-  @Type(() => Date)
-  scheduledDate: Date;
+  @IsNotEmpty({ message: 'scheduledDate is required' })
+  @IsString({ message: 'scheduledDate must be a string' })
+  scheduledDate: string; // Accept ISO 8601 string format - validation happens in service
 
   @IsEnum(InterviewMethod)
   method: InterviewMethod;

@@ -41,11 +41,16 @@ export default function OfferDetail() {
     setLoading(true);
     setError(null);
     try {
+      console.log('Fetching offer with ID:', offerId);
       const res = await apiClient.get<Offer>(`/offers/${offerId}`);
+      console.log('Offer fetched successfully:', res.data);
       setOffer(res.data);
     } catch (err: any) {
       console.error('Error fetching offer:', err);
-      setError(err?.response?.data?.message || 'Could not load offer details.');
+      console.error('Error response:', err?.response);
+      console.error('Error status:', err?.response?.status);
+      console.error('Error URL:', err?.config?.url);
+      setError(err?.response?.data?.message || err?.message || `Could not load offer details. Status: ${err?.response?.status || 'Unknown'}`);
     } finally {
       setLoading(false);
     }
@@ -123,18 +128,30 @@ export default function OfferDetail() {
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 space-y-6">
           <header className="space-y-3">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-semibold">Offer Details</h1>
-              <span
-                className={`px-3 py-1 rounded-full text-sm ${getStatusColor(offer.applicantResponse)}`}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-3xl font-semibold">Offer Details</h1>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm ${getStatusColor(offer.finalStatus)}`}
+                    title="HR/Manager Approval Status"
+                  >
+                    HR: {offer.finalStatus === 'pending' ? 'Pending Approval' : offer.finalStatus}
+                  </span>
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm ${getStatusColor(offer.applicantResponse)}`}
+                    title="Candidate Response Status"
+                  >
+                    Candidate: {offer.applicantResponse === 'pending' ? 'Pending Response' : offer.applicantResponse}
+                  </span>
+                </div>
+              </div>
+              <Link
+                href="/subsystems/recruitment/offers"
+                className="text-blue-300 hover:text-blue-200 underline text-sm"
               >
-                {offer.applicantResponse}
-              </span>
-              <span
-                className={`px-3 py-1 rounded-full text-sm ${getStatusColor(offer.finalStatus)}`}
-              >
-                {offer.finalStatus}
-              </span>
+                ← Back
+              </Link>
             </div>
           </header>
 
@@ -232,12 +249,20 @@ export default function OfferDetail() {
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <h3 className="text-sm uppercase tracking-wider text-slate-400">Application ID</h3>
-                <p className="text-slate-200 font-mono text-sm">{offer.applicationId}</p>
+                <p className="text-slate-200 font-mono text-sm">
+                  {typeof offer.applicationId === 'object' 
+                    ? (offer.applicationId as any)?._id || String(offer.applicationId)
+                    : offer.applicationId}
+                </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="text-sm uppercase tracking-wider text-slate-400">Candidate ID</h3>
-                <p className="text-slate-200 font-mono text-sm">{offer.candidateId}</p>
+                <p className="text-slate-200 font-mono text-sm">
+                  {typeof offer.candidateId === 'object' 
+                    ? (offer.candidateId as any)?._id || (offer.candidateId as any)?.candidateNumber || String(offer.candidateId)
+                    : offer.candidateId || 'N/A'}
+                </p>
               </div>
             </div>
 
@@ -282,8 +307,9 @@ export default function OfferDetail() {
                 setShowApproveForm(true);
               }}
               className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition font-semibold text-white"
+              title="For HR/Managers: Approve or reject the offer before sending to candidate"
             >
-              Approve/Reject Offer
+              HR Approval
             </button>
             <button
               onClick={() => {
@@ -291,8 +317,9 @@ export default function OfferDetail() {
                 setShowAcceptForm(true);
               }}
               className="px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 transition font-semibold text-white"
+              title="For Candidate: Accept or reject the offer"
             >
-              Accept/Reject Offer
+              Candidate Response
             </button>
           </div>
         </div>
@@ -301,7 +328,8 @@ export default function OfferDetail() {
         {showApproveForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-900 rounded-2xl border border-white/10 p-6 max-w-2xl w-full">
-              <h2 className="text-2xl font-semibold mb-4">Approve Offer</h2>
+              <h2 className="text-2xl font-semibold mb-2">HR/Manager Approval</h2>
+              <p className="text-sm text-slate-400 mb-4">Approve or reject this offer before sending to candidate</p>
               <form onSubmit={handleApprove} className="space-y-4">
                 <label className="space-y-2 block">
                   <span className="text-sm text-slate-100">Employee ID *</span>
@@ -381,7 +409,8 @@ export default function OfferDetail() {
         {showAcceptForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-900 rounded-2xl border border-white/10 p-6 max-w-2xl w-full">
-              <h2 className="text-2xl font-semibold mb-4">Respond to Offer</h2>
+              <h2 className="text-2xl font-semibold mb-2">Candidate Response</h2>
+              <p className="text-sm text-slate-400 mb-4">Accept or reject this job offer</p>
               <form onSubmit={handleAccept} className="space-y-4">
                 <label className="space-y-2 block">
                   <span className="text-sm text-slate-100">Response *</span>

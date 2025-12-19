@@ -21,10 +21,14 @@ export class CreateApplicationDto {
   @IsOptional()
   status?: ApplicationStatus;
 
-  // CV/Resume file path (after upload)
+  // CV/Resume file path or data URL (required)
+  @IsString()
+  cvPath: string;
+  
+  // CV file name (if uploaded as file)
   @IsString()
   @IsOptional()
-  cvPath?: string;
+  cvFileName?: string;
 
   // Consent for data processing (BR28)
   @IsBoolean()

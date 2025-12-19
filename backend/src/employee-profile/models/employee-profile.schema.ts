@@ -25,6 +25,8 @@ export class EmployeeProfile extends UserProfileBase {
   @Prop({ type: Date, required: true })
   dateOfHire: Date;
 
+  
+
   @Prop({ type: String })
   workEmail?: string;
 

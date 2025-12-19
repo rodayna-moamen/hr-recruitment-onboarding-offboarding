@@ -22,7 +22,7 @@ import {
   AppraisalDispute,
   AppraisalDisputeSchema,
 } from './models/appraisal-dispute.schema';
-
+import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -32,6 +32,7 @@ import {
       { name: AppraisalRecord.name, schema: AppraisalRecordSchema },
       { name: AppraisalDispute.name, schema: AppraisalDisputeSchema },
     ]),
+    EmployeeProfileModule,
   ],
   controllers: [PerformanceController],
   providers: [PerformanceService],

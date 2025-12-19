@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { JobRequisition, JobTemplate } from '../../types/recruitment';
+import { JobRequisition, JobTemplate } from '../../../../types/recruitment';
 
 // Validation schema
 const jobSchema = z.object({
@@ -99,3 +99,6 @@ export const JobForm: React.FC<JobFormProps> = ({ onSubmit, onCancel, loading, d
     </form>
   );
 };
+
+// No default export - this is a component, not a page
+

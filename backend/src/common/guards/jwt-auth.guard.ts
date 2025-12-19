@@ -4,28 +4,37 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  constructor(private readonly jwtService: JwtService) {}
+
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
 
-    // Read fake "auth" from headers
-    const userId = request.headers['x-user-id'] as string;
-    const role = request.headers['x-user-role'] as string;
-
-    if (!userId || !role) {
-      throw new UnauthorizedException(
-        'Missing x-user-id or x-user-role header',
-      );
+    const authHeader = request.headers['authorization'];
+    if (!authHeader) {
+      throw new UnauthorizedException('Missing Authorization header ❌');
     }
 
-    // Attach user object – controller/guards use this
-    request.user = {
-      id: userId,
-      role: role,
-    };
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      throw new UnauthorizedException('Invalid Authorization format ❌');
+    }
 
-    return true;
+    try {
+      const decoded = this.jwtService.verify(token);
+
+      request.user = {
+        id: decoded.id,
+        role: decoded.role,
+        username: decoded.username,
+      };
+
+      return true;
+    } catch (err) {
+      throw new UnauthorizedException('Invalid or expired token ❌');
+    }
   }
 }

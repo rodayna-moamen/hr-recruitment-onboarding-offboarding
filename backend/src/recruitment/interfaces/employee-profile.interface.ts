@@ -19,5 +19,12 @@ export interface IEmployeeProfileService {
       startDate: Date;
     },
   ): Promise<{ employeeId: string }>;
+
+  /**
+   * Update employee status (e.g., to INACTIVE or TERMINATED)
+   * @param employeeId - The employee ID
+   * @param status - The new status
+   */
+  updateEmployeeStatus(employeeId: string, status: string): Promise<void>;
 }
 

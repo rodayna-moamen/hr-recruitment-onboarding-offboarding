@@ -14,12 +14,14 @@ export default function Offers() {
   const router = useRouter();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [offerApplications, setOfferApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [showApproveForm, setShowApproveForm] = useState(false);
   const [showAcceptForm, setShowAcceptForm] = useState(false);
+  const [offerIdSearch, setOfferIdSearch] = useState('');
 
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -58,9 +60,18 @@ export default function Offers() {
     setLoading(true);
     setError(null);
     try {
-      // Note: Backend might not have a GET /offers endpoint, so we'll need to fetch individually
-      // For now, we'll show a message that offers need to be accessed by ID
-      setOffers([]);
+      try {
+        const res = await apiClient.get<Offer[]>('/offers');
+        setOffers(Array.isArray(res.data) ? res.data : []);
+        setOfferApplications([]);
+      } catch (directFetchError: any) {
+        const applicationsRes = await apiClient.get<Application[]>('/applications');
+        const appsWithOffers = applicationsRes.data.filter(
+          (app) => app.status === 'offer' || app.currentStage === 'offer'
+        );
+        setOfferApplications(appsWithOffers);
+        setOffers([]);
+      }
     } catch (err: any) {
       console.error('Error fetching offers:', err);
       setError(err?.response?.data?.message || 'Could not load offers.');
@@ -163,11 +174,21 @@ export default function Offers() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-6 py-12">
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="space-y-3">
-          <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Recruitment</p>
-          <h1 className="text-4xl lg:text-5xl font-semibold">Offers</h1>
-          <p className="text-lg text-slate-200/80">
-            Create, approve, and manage job offers.
-          </p>
+          <div className="flex items-center justify-between">
+            <div className="space-y-3">
+              <p className="text-sm uppercase tracking-[0.3em] text-blue-300/80">Recruitment</p>
+              <h1 className="text-4xl lg:text-5xl font-semibold">Offers</h1>
+              <p className="text-lg text-slate-200/80">
+                Create, approve, and manage job offers.
+              </p>
+            </div>
+            <Link
+              href="/subsystems/recruitment"
+              className="text-blue-300 hover:text-blue-200 underline text-sm self-start"
+            >
+              ← Back
+            </Link>
+          </div>
         </header>
 
         <button
@@ -378,12 +399,142 @@ export default function Offers() {
         {/* Error State */}
         {error && !loading && <div className="text-center text-red-200">{error}</div>}
 
-        {/* Info Message */}
-        {!loading && !error && (
+        {/* Offers List */}
+        {!loading && !error && offers.length > 0 && (
+          <div className="grid gap-4">
+            {offers.map((offer) => (
+              <Link
+                key={offer._id}
+                href={`/subsystems/recruitment/offers/${offer._id}`}
+                className="group rounded-2xl border border-white/10 bg-white/5 p-6 hover:border-blue-400/60 hover:bg-white/10 transition"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-xl font-semibold">{offer.role}</h3>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs ${
+                          offer.applicantResponse === OfferResponseStatus.ACCEPTED
+                            ? 'bg-green-500/20 border border-green-400/40 text-green-200'
+                            : offer.applicantResponse === OfferResponseStatus.REJECTED
+                              ? 'bg-red-500/20 border border-red-400/40 text-red-200'
+                              : 'bg-yellow-500/20 border border-yellow-400/40 text-yellow-200'
+                        }`}
+                      >
+                        {offer.applicantResponse}
+                      </span>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs ${
+                          offer.finalStatus === OfferFinalStatus.APPROVED
+                            ? 'bg-green-500/20 border border-green-400/40 text-green-200'
+                            : offer.finalStatus === OfferFinalStatus.REJECTED
+                              ? 'bg-red-500/20 border border-red-400/40 text-red-200'
+                              : 'bg-yellow-500/20 border border-yellow-400/40 text-yellow-200'
+                        }`}
+                      >
+                        {offer.finalStatus}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-200/80">
+                      Salary: ${offer.grossSalary.toLocaleString()}
+                      {offer.signingBonus && ` + $${offer.signingBonus.toLocaleString()} signing bonus`}
+                    </p>
+                    <p className="text-sm text-slate-200/80">
+                      Deadline: {new Date(offer.deadline).toLocaleString()}
+                    </p>
+                    {offer.approvers && offer.approvers.length > 0 && (
+                      <p className="text-sm text-slate-200/80">
+                        Approvers: {offer.approvers.length} ({offer.approvers.filter((a) => a.status === ApprovalStatus.APPROVED).length} approved)
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-blue-400 group-hover:text-blue-300">View →</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {!loading && !error && offers.length === 0 && offerApplications.length > 0 && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-blue-400/40 bg-blue-500/10 p-4">
+              <p className="text-sm text-slate-200">
+                Showing applications in offer stage. Click to view application details or create an offer.
+              </p>
+            </div>
+            <div className="grid gap-4">
+              {offerApplications.map((app) => (
+                <div
+                  key={app._id}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-6"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-semibold">Application {app._id.slice(-8)}</h3>
+                        <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 border border-blue-400/40 text-blue-200">
+                          {app.status}
+                        </span>
+                        <span className="px-2 py-1 rounded-full text-xs bg-purple-500/20 border border-purple-400/40 text-purple-200">
+                          {app.currentStage}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-200/80">
+                        Candidate ID: {app.candidateId ? app.candidateId.slice(-8) : 'N/A'}
+                      </p>
+                      <p className="text-sm text-slate-200/80">
+                        Created: {app.createdAt ? new Date(app.createdAt).toLocaleString() : 'N/A'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Link
+                        href={`/subsystems/recruitment/applications/${app._id}`}
+                        className="px-3 py-1 rounded-lg bg-slate-700/50 hover:bg-slate-700/70 border border-white/10 text-sm"
+                      >
+                        View Application
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && offers.length === 0 && offerApplications.length === 0 && (
           <div className="rounded-2xl border border-blue-400/40 bg-blue-500/10 p-6 text-center">
-            <p className="text-slate-200">
-              To view an offer, navigate to <code className="px-2 py-1 bg-slate-800 rounded">/offers/[id]</code> or create a new offer above.
+            <p className="text-slate-200 mb-2">No offers found.</p>
+            <p className="text-sm text-slate-300/80">
+              Create a new offer above or view an offer by ID using the search below.
             </p>
+          </div>
+        )}
+
+        {/* Offer ID Search */}
+        {!loading && !error && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <h3 className="text-lg font-semibold mb-4">View Offer by ID</h3>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={offerIdSearch}
+                onChange={(e) => setOfferIdSearch(e.target.value)}
+                placeholder="Enter Offer ID (MongoDB ObjectId)"
+                className="flex-1 rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={() => {
+                  if (offerIdSearch.trim()) {
+                    router.push(`/subsystems/recruitment/offers/${offerIdSearch.trim()}`);
+                  }
+                }}
+                disabled={!offerIdSearch.trim()}
+                className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                View Offer
+              </button>
+            </div>
           </div>
         )}
 

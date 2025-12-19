@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { fetchJobRequisitions, fetchJobTemplates, createJobRequisition, updateJobRequisition, publishJobRequisition } from '../../../services/recruitment';
 import { JobRequisition, JobTemplate } from '../../../types/recruitment';
-import { JobsTable } from '../../../components/recruitment/JobsTable';
-import { JobForm, JobFormValues } from '../../../components/recruitment/JobForm';
+import { JobsTable } from './_components/JobsTable';
+import { JobForm, JobFormValues } from './_components/JobForm';
 
 const Jobs: React.FC = () => {
   const [jobs, setJobs] = useState<JobRequisition[]>([]);
@@ -123,12 +124,20 @@ const Jobs: React.FC = () => {
             <h1 className="text-3xl font-bold">Job Requisitions</h1>
             <p className="text-xs text-blue-300/80 uppercase tracking-widest">Recruitment - Internal HR</p>
           </div>
-          <button
-            className="bg-blue-700 hover:bg-blue-800 transition text-white py-2 px-4 rounded shadow font-medium"
-            onClick={openCreate}
-          >
-            + Create Job
-          </button>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/subsystems/recruitment"
+              className="text-blue-300 hover:text-blue-200 underline text-sm"
+            >
+              ← Back
+            </Link>
+            <button
+              className="bg-blue-700 hover:bg-blue-800 transition text-white py-2 px-4 rounded shadow font-medium"
+              onClick={openCreate}
+            >
+              + Create Job
+            </button>
+          </div>
         </div>
         {success && <div className="mb-2 p-2 bg-green-800/60 text-green-200 rounded">{success}</div>}
         {error && <div className="mb-2 p-2 bg-red-800/60 text-red-200 rounded">{error}</div>}

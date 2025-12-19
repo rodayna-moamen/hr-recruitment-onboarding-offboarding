@@ -11,7 +11,14 @@ import {
   UsePipes,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  Req,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import {
   ApiTags,
   ApiOperation,
@@ -40,14 +47,28 @@ import {
   CreateReferralDto,
   RejectionTemplateDto,
   AnalyticsQueryDto,
+  CreateOnboardingChecklistDto,
+  UpdateOnboardingTaskDto,
+  UploadDocumentDto,
+  CreateTerminationRequestDto,
+  InitiateTerminationReviewDto,
+  UpdateClearanceItemDto,
+  UpdateEquipmentReturnDto,
 } from './dto';
+import { ReserveEquipmentDto } from './dto/reserve-equipment.dto';
 import { ValidationPipe } from '@nestjs/common';
+import { OnboardingService } from './services/onboarding.service';
+import { OffboardingService } from './services/offboarding.service';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class RecruitmentController {
-    constructor(private readonly recruitmentService: RecruitmentService) {}
+    constructor(
+      private readonly recruitmentService: RecruitmentService,
+      private readonly onboardingService: OnboardingService,
+      private readonly offboardingService: OffboardingService,
+    ) {}
   
     @Get()
     @ApiOperation({ summary: 'API Information' })
@@ -162,24 +183,29 @@ export class RecruitmentController {
     }
   
     @ApiTags('jobs')
-    @ApiOperation({ summary: 'List all job requisitions' })
+    @ApiOperation({ 
+      summary: 'List all job requisitions',
+      description: 'Candidates only see published jobs. HR employees see all jobs (published, draft, closed).'
+    })
     @ApiResponse({ status: 200, description: 'List of job requisitions' })
     @Get('jobs')
-    async listJobs() {
-      return this.recruitmentService.findAllJobRequisitions();
+    async listJobs(@Req() req: any) {
+      const userRole = req.user?.role;
+      return this.recruitmentService.findAllJobRequisitions(userRole);
     }
   
     @ApiTags('jobs')
     @ApiOperation({
       summary: 'Get job requisition by ID',
-      description: 'Get a single job/requisition (preview for careers page)',
+      description: 'Get a single job/requisition (preview for careers page). Candidates can only access published jobs.',
     })
     @ApiParam({ name: 'id', description: 'Job requisition ID' })
     @ApiResponse({ status: 200, description: 'Job requisition found' })
     @ApiResponse({ status: 404, description: 'Job not found' })
     @Get('jobs/:id')
-    async getJob(@Param('id') id: string) {
-      return this.recruitmentService.findJobRequisitionById(id);
+    async getJob(@Param('id') id: string, @Req() req: any) {
+      const userRole = req.user?.role;
+      return this.recruitmentService.findJobRequisitionById(id, userRole);
     }
   
     @ApiTags('jobs')
@@ -236,24 +262,48 @@ export class RecruitmentController {
     }
   
     @ApiTags('applications')
-    @ApiOperation({ summary: 'Get all applications' })
+    @ApiOperation({ 
+      summary: 'Get all applications',
+      description: 'Candidates only see their own applications. HR employees see all applications.'
+    })
+    @ApiQuery({ name: 'stage', required: false, description: 'Filter by application stage' })
+    @ApiQuery({ name: 'status', required: false, description: 'Filter by application status' })
+    @ApiQuery({ name: 'candidateId', required: false, description: 'Filter by candidate ID' })
     @ApiResponse({ status: 200, description: 'List of applications' })
     @Get('applications')
-    async getAllApplications() {
-      return this.recruitmentService.findAllApplications();
+    async getAllApplications(
+      @Req() req: any,
+      @Query('stage') stage?: string,
+      @Query('status') status?: string,
+      @Query('candidateId') candidateId?: string,
+    ) {
+      const userRole = req.user?.role;
+      const userId = req.user?.userId || req.user?._id || req.user?.id;
+      
+      const filters: any = {};
+      if (stage) filters.currentStage = stage;
+      if (status) filters.status = status;
+      if (candidateId) filters.candidateId = candidateId;
+      return this.recruitmentService.findAllApplications(
+        Object.keys(filters).length > 0 ? filters : undefined,
+        userRole,
+        userId,
+      );
     }
   
     @ApiTags('applications')
     @ApiOperation({
       summary: 'Get application by ID',
-      description: 'Get application details including status and history',
+      description: 'Get application details including status and history. Candidates can only access their own applications.',
     })
     @ApiParam({ name: 'id', description: 'Application ID' })
     @ApiResponse({ status: 200, description: 'Application found' })
     @ApiResponse({ status: 404, description: 'Application not found' })
     @Get('applications/:id')
-    async getApplication(@Param('id') id: string) {
-      return this.recruitmentService.findApplicationById(id);
+    async getApplication(@Param('id') id: string, @Req() req: any) {
+      const userRole = req.user?.role;
+      const userId = req.user?.userId || req.user?._id || req.user?.id;
+      return this.recruitmentService.findApplicationById(id, userRole, userId);
     }
   
     @ApiTags('applications')
@@ -354,16 +404,17 @@ export class RecruitmentController {
     @ApiOperation({ summary: 'Get all interviews for an application' })
     @ApiQuery({
       name: 'applicationId',
-      required: true,
-      description: 'Application ID',
+      required: false,
+      description: 'Application ID (optional - if not provided, returns all interviews)',
     })
     @ApiResponse({ status: 200, description: 'List of interviews' })
     @Get('interviews')
-    async getInterviews(@Query('applicationId') applicationId: string) {
-      if (!applicationId) {
-        return { message: 'applicationId query parameter is required' };
+    async getInterviews(@Query('applicationId') applicationId?: string) {
+      if (applicationId) {
+        return this.recruitmentService.findInterviewsByApplication(applicationId);
       }
-      return this.recruitmentService.findInterviewsByApplication(applicationId);
+      // Return all interviews sorted by date
+      return this.recruitmentService.findAllInterviews();
     }
   
     @ApiTags('interviews')
@@ -431,19 +482,19 @@ export class RecruitmentController {
     }
   
     @ApiTags('recruitment')
-    @ApiOperation({ summary: 'Get referrals by candidate' })
+    @ApiOperation({ summary: 'Get referrals (all or by candidate)' })
     @ApiQuery({
       name: 'candidateId',
-      required: true,
-      description: 'Candidate ID',
+      required: false,
+      description: 'Optional: Filter by candidate ID',
     })
     @ApiResponse({ status: 200, description: 'List of referrals' })
     @Get('referrals')
-    async getReferrals(@Query('candidateId') candidateId: string) {
-      if (!candidateId) {
-        return { message: 'candidateId query parameter is required' };
+    async getReferrals(@Query('candidateId') candidateId?: string) {
+      if (candidateId) {
+        return this.recruitmentService.findReferralsByCandidate(candidateId);
       }
-      return this.recruitmentService.findReferralsByCandidate(candidateId);
+      return this.recruitmentService.findAllReferrals();
     }
   
     // ==========================================
@@ -473,13 +524,25 @@ export class RecruitmentController {
     }
   
     @ApiTags('offers')
+    @ApiOperation({ summary: 'List all offers' })
+    @ApiResponse({ status: 200, description: 'List of offers' })
+    @Get('offers')
+    async listOffers() {
+      return this.recruitmentService.findAllOffers();
+    }
+
+    @ApiTags('offers')
     @ApiOperation({ summary: 'Get offer by ID' })
     @ApiParam({ name: 'id', description: 'Offer ID' })
     @ApiResponse({ status: 200, description: 'Offer found' })
     @ApiResponse({ status: 404, description: 'Offer not found' })
     @Get('offers/:id')
     async getOffer(@Param('id') id: string) {
-      return this.recruitmentService.findOfferById(id);
+      try {
+        return await this.recruitmentService.findOfferById(id);
+      } catch (error) {
+        throw error;
+      }
     }
   
     @ApiTags('offers')
@@ -570,5 +633,426 @@ export class RecruitmentController {
         };
       }
       return { message: 'Consent saved successfully', consent: dto };
+    }
+
+    @ApiTags('applications')
+    @ApiOperation({
+      summary: 'Withdraw consent for data processing (REC-028)',
+      description:
+        'Allow candidates to withdraw consent for data processing. BR28, NFR-33: GDPR compliance - right to withdraw consent.',
+    })
+    @ApiParam({ name: 'applicationId', description: 'Application ID' })
+    @ApiResponse({ status: 200, description: 'Consent withdrawn successfully' })
+    @ApiResponse({ status: 404, description: 'Application not found' })
+    @Post('applications/:applicationId/withdraw-consent')
+    @HttpCode(HttpStatus.OK)
+    async withdrawConsent(
+      @Param('applicationId') applicationId: string,
+      @Body() dto: { candidateId: string },
+    ) {
+      await this.recruitmentService.withdrawConsent(dto.candidateId, applicationId);
+      return { message: 'Consent withdrawn successfully. Data will be anonymized per GDPR requirements.' };
+    }
+
+    @ApiTags('applications')
+    @ApiOperation({
+      summary: 'Get consent history for candidate (REC-028)',
+      description:
+        'Get all consent-related notifications for a candidate. BR28: Consent history tracking for GDPR compliance.',
+    })
+    @ApiParam({ name: 'candidateId', description: 'Candidate ID' })
+    @ApiResponse({ status: 200, description: 'Consent history retrieved' })
+    @Get('candidates/:candidateId/consent-history')
+    async getConsentHistory(@Param('candidateId') candidateId: string) {
+      return this.recruitmentService.getConsentHistory(candidateId);
+    }
+
+    // ==========================================
+    // EVALUATION CRITERIA (REC-020, REC-015) - BR21, BR23
+    // ==========================================
+
+    @ApiTags('interviews')
+    @ApiOperation({
+      summary: 'Get evaluation criteria for role (REC-020, REC-015)',
+      description:
+        'Get pre-set evaluation criteria for a specific role. BR21: Criteria are pre-set and agreed upon.',
+    })
+    @ApiQuery({ name: 'role', required: true, description: 'Job role/title' })
+    @ApiQuery({ name: 'department', required: false, description: 'Department name' })
+    @ApiResponse({ status: 200, description: 'Evaluation criteria retrieved' })
+    @Get('evaluation-criteria')
+    async getEvaluationCriteria(
+      @Query('role') role: string,
+      @Query('department') department?: string,
+    ) {
+      return this.recruitmentService.getEvaluationCriteria(role, department);
+    }
+
+    // ==========================================
+    // ONBOARDING (REC-029) - Multiple User Stories
+    // ==========================================
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Get onboarding by employee ID',
+      description: 'New Hire views their onboarding steps in a tracker',
+    })
+    @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+    @ApiResponse({ status: 200, description: 'Onboarding found' })
+    @ApiResponse({ status: 404, description: 'Onboarding not found' })
+    @Get('onboarding/employee/:employeeId')
+    async getOnboardingByEmployee(@Param('employeeId') employeeId: string) {
+      return this.onboardingService.getOnboardingByEmployeeId(employeeId);
+    }
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Get onboarding by ID',
+      description: 'Get onboarding details with tasks',
+    })
+    @ApiParam({ name: 'id', description: 'Onboarding ID' })
+    @ApiResponse({ status: 200, description: 'Onboarding found' })
+    @ApiResponse({ status: 404, description: 'Onboarding not found' })
+    @Get('onboarding/:id')
+    async getOnboarding(@Param('id') id: string) {
+      return this.onboardingService.getOnboardingById(id);
+    }
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Create onboarding checklist template (HR Manager)',
+      description: 'HR Manager creates onboarding task checklists for new hires',
+    })
+    @ApiBody({ type: CreateOnboardingChecklistDto })
+    @ApiResponse({ status: 201, description: 'Checklist created' })
+    @Roles('hr_manager')
+    @Post('onboarding/checklists')
+    @HttpCode(HttpStatus.CREATED)
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async createOnboardingChecklist(@Body() dto: CreateOnboardingChecklistDto) {
+      return this.onboardingService.createOnboardingChecklist(dto);
+    }
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Update onboarding task',
+      description: 'Update task status, upload documents, mark as completed',
+    })
+    @ApiParam({ name: 'id', description: 'Onboarding ID' })
+    @ApiParam({ name: 'taskIndex', description: 'Task index (0-based)' })
+    @ApiBody({ type: UpdateOnboardingTaskDto })
+    @ApiResponse({ status: 200, description: 'Task updated' })
+    @Put('onboarding/:id/tasks/:taskIndex')
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async updateOnboardingTask(
+      @Param('id') id: string,
+      @Param('taskIndex') taskIndex: string,
+      @Body() dto: UpdateOnboardingTaskDto,
+    ) {
+      return this.onboardingService.updateOnboardingTask(id, parseInt(taskIndex, 10), dto);
+    }
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Upload document for onboarding',
+      description: 'Candidate/New Hire uploads signed contract, ID, certificates, etc.',
+    })
+    @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+    @ApiResponse({ status: 201, description: 'Document uploaded' })
+    @Post('onboarding/:employeeId/documents')
+    @HttpCode(HttpStatus.CREATED)
+    @UseInterceptors(
+      FileInterceptor('file', {
+        storage: diskStorage({
+          destination: './uploads/onboarding',
+          filename: (req, file, cb) => {
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const ext = extname(file.originalname);
+            cb(null, `${req.params.employeeId}-${uniqueSuffix}${ext}`);
+          },
+        }),
+        limits: {
+          fileSize: 10 * 1024 * 1024, // 10MB limit
+        },
+        fileFilter: (req, file, cb) => {
+          const allowedMimes = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'image/jpeg',
+            'image/png',
+          ];
+          if (allowedMimes.includes(file.mimetype)) {
+            cb(null, true);
+          } else {
+            cb(new Error('Invalid file type. Only PDF, DOC, DOCX, JPEG, and PNG are allowed.'), false);
+          }
+        },
+      }),
+    )
+    async uploadDocument(
+      @Param('employeeId') employeeId: string,
+      @UploadedFile() file: Express.Multer.File,
+      @Body('type') type: string,
+    ) {
+      if (!file) {
+        throw new BadRequestException('File is required');
+      }
+      
+      const filePath = file.path;
+      return this.onboardingService.uploadDocument(employeeId, {
+        type: type as any,
+        filePath,
+        ownerId: employeeId,
+      });
+    }
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Get contract by offer ID (HR Manager)',
+      description: 'HR Manager accesses signed contract details to create employee profile',
+    })
+    @ApiParam({ name: 'offerId', description: 'Offer ID' })
+    @ApiResponse({ status: 200, description: 'Contract found' })
+    @ApiResponse({ status: 404, description: 'Contract not found' })
+    @Roles('hr_manager')
+    @Get('contracts/offer/:offerId')
+    async getContractByOffer(@Param('offerId') offerId: string) {
+      return this.onboardingService.getContractByOfferId(offerId);
+    }
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Get contract by ID',
+      description: 'Get contract details',
+    })
+    @ApiParam({ name: 'id', description: 'Contract ID' })
+    @ApiResponse({ status: 200, description: 'Contract found' })
+    @ApiResponse({ status: 404, description: 'Contract not found' })
+    @Get('contracts/:id')
+    async getContract(@Param('id') id: string) {
+      return this.onboardingService.getContractById(id);
+    }
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Reserve equipment for new hire (HR Employee)',
+      description: 'HR Employee reserves and tracks equipment, desk, and access cards for new hires',
+    })
+    @ApiParam({ name: 'id', description: 'Onboarding ID' })
+    @ApiParam({ name: 'taskIndex', description: 'Task index (0-based)' })
+    @ApiBody({ type: ReserveEquipmentDto })
+    @ApiResponse({ status: 200, description: 'Equipment reserved' })
+    @Roles('hr_employee', 'hr_manager')
+    @Post('onboarding/:id/tasks/:taskIndex/reserve-equipment')
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async reserveEquipment(
+      @Param('id') id: string,
+      @Param('taskIndex') taskIndex: string,
+      @Body() dto: ReserveEquipmentDto,
+    ) {
+      return this.onboardingService.reserveEquipment(id, parseInt(taskIndex, 10), dto);
+    }
+
+    // ==========================================
+    // OFFBOARDING - Termination & Resignation
+    // ==========================================
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Employee requests resignation',
+      description: 'Employee submits resignation request with reasoning',
+    })
+    @ApiBody({ type: CreateTerminationRequestDto })
+    @ApiResponse({ status: 201, description: 'Resignation request created' })
+    @Post('termination-requests/resignation')
+    @HttpCode(HttpStatus.CREATED)
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async createResignationRequest(@Body() dto: CreateTerminationRequestDto) {
+      return this.offboardingService.createResignationRequest(dto);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Get resignation requests by employee',
+      description: 'Employee tracks their resignation request status',
+    })
+    @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+    @ApiResponse({ status: 200, description: 'Resignation requests found' })
+    @Get('termination-requests/employee/:employeeId')
+    async getResignationRequestsByEmployee(@Param('employeeId') employeeId: string) {
+      return this.offboardingService.getTerminationRequestsByEmployee(employeeId);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'HR Manager initiates termination review',
+      description: 'HR Manager initiates termination based on warnings/performance data',
+    })
+    @ApiBody({ type: InitiateTerminationReviewDto })
+    @ApiResponse({ status: 201, description: 'Termination review initiated' })
+    @Roles('hr_manager')
+    @Post('termination-requests/review')
+    @HttpCode(HttpStatus.CREATED)
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async initiateTerminationReview(@Body() dto: InitiateTerminationReviewDto) {
+      return this.offboardingService.initiateTerminationReview(dto);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Get all termination requests',
+      description: 'HR Manager views all termination requests',
+    })
+    @ApiResponse({ status: 200, description: 'Termination requests found' })
+    @Roles('hr_manager', 'hr_employee', 'hr_admin')
+    @Get('termination-requests')
+    async getAllTerminationRequests() {
+      return this.offboardingService.getAllTerminationRequests();
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Get termination request by ID',
+      description: 'Get termination request details',
+    })
+    @ApiParam({ name: 'id', description: 'Termination request ID' })
+    @ApiResponse({ status: 200, description: 'Termination request found' })
+    @Get('termination-requests/:id')
+    async getTerminationRequest(@Param('id') id: string) {
+      return this.offboardingService.getTerminationRequestById(id);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Approve termination request',
+      description: 'HR Manager approves termination and triggers offboarding',
+    })
+    @ApiParam({ name: 'id', description: 'Termination request ID' })
+    @ApiResponse({ status: 200, description: 'Termination approved' })
+    @Roles('hr_manager')
+    @Post('termination-requests/:id/approve')
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async approveTermination(@Param('id') id: string) {
+      return this.offboardingService.approveTermination(id);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Get clearance checklist',
+      description: 'Get offboarding checklist for termination',
+    })
+    @ApiParam({ name: 'terminationId', description: 'Termination request ID' })
+    @ApiResponse({ status: 200, description: 'Clearance checklist found' })
+    @Get('clearance-checklist/:terminationId')
+    async getClearanceChecklist(@Param('terminationId') terminationId: string) {
+      return this.offboardingService.getClearanceChecklist(terminationId);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Update clearance item (multi-department sign-off)',
+      description: 'Department updates their clearance status (IT, Finance, Facilities, Line Manager)',
+    })
+    @ApiParam({ name: 'terminationId', description: 'Termination request ID' })
+    @ApiParam({ name: 'department', description: 'Department name' })
+    @ApiBody({ type: UpdateClearanceItemDto })
+    @ApiResponse({ status: 200, description: 'Clearance item updated' })
+    @Put('clearance-checklist/:terminationId/departments/:department')
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async updateClearanceItem(
+      @Param('terminationId') terminationId: string,
+      @Param('department') department: string,
+      @Body() dto: UpdateClearanceItemDto,
+      @Req() req: any,
+    ) {
+      const updatedBy = req.user?.id || 'system';
+      return this.offboardingService.updateClearanceItem(terminationId, department, dto, updatedBy);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Update equipment return status',
+      description: 'Track equipment return (IT assets, ID cards, etc.)',
+    })
+    @ApiParam({ name: 'terminationId', description: 'Termination request ID' })
+    @ApiBody({ type: UpdateEquipmentReturnDto })
+    @ApiResponse({ status: 200, description: 'Equipment return updated' })
+    @Put('clearance-checklist/:terminationId/equipment')
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async updateEquipmentReturn(
+      @Param('terminationId') terminationId: string,
+      @Body() dto: UpdateEquipmentReturnDto,
+    ) {
+      return this.offboardingService.updateEquipmentReturn(terminationId, dto);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Mark access card as returned',
+      description: 'Mark access card return in clearance checklist',
+    })
+    @ApiParam({ name: 'terminationId', description: 'Termination request ID' })
+    @ApiResponse({ status: 200, description: 'Card marked as returned' })
+    @Post('clearance-checklist/:terminationId/card-returned')
+    async markCardReturned(@Param('terminationId') terminationId: string) {
+      return this.offboardingService.markCardReturned(terminationId);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Get employee performance data',
+      description: 'Get warnings and low performance scores for termination review',
+    })
+    @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+    @ApiResponse({ status: 200, description: 'Performance data found' })
+    @Roles('hr_manager')
+    @Get('termination-requests/employee/:employeeId/performance')
+    async getEmployeePerformanceData(@Param('employeeId') employeeId: string) {
+      return this.offboardingService.getEmployeePerformanceData(employeeId);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Get employee leave balance',
+      description: 'Get leave balance for final payroll calculations',
+    })
+    @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+    @ApiResponse({ status: 200, description: 'Leave balance found' })
+    @Roles('hr_manager', 'hr_employee')
+    @Get('termination-requests/employee/:employeeId/leave-balance')
+    async getEmployeeLeaveBalance(@Param('employeeId') employeeId: string) {
+      return this.offboardingService.getEmployeeLeaveBalance(employeeId);
+    }
+
+    @ApiTags('offboarding')
+    @ApiOperation({
+      summary: 'Revoke system access (System Admin)',
+      description: 'Revoke system and account access upon termination. This disables the user account, invalidates tokens, and revokes all system access.',
+    })
+    @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+    @ApiResponse({ status: 200, description: 'System access revoked' })
+    @Roles('system_admin')
+    @Post('termination-requests/employee/:employeeId/revoke-access')
+    async revokeSystemAccess(@Param('employeeId') employeeId: string) {
+      await this.offboardingService.revokeSystemAccess(employeeId);
+      return { message: 'System access revocation initiated. Account disabled, tokens invalidated, and all system access revoked.' };
+    }
+
+    // ==========================================
+    // SYSTEM ADMIN PROVISIONING (ONB-009, ONB-013)
+    // ==========================================
+
+    @ApiTags('onboarding')
+    @ApiOperation({
+      summary: 'Trigger system access provisioning (System Admin) - ONB-009',
+      description: 'System Admin triggers actual provisioning of email, SSO, payroll, and internal system access for a new hire.',
+    })
+    @ApiParam({ name: 'employeeId', description: 'Employee ID' })
+    @ApiResponse({ status: 200, description: 'Provisioning triggered' })
+    @Roles('system_admin')
+    @Post('onboarding/employee/:employeeId/provision-access')
+    async provisionSystemAccess(@Param('employeeId') employeeId: string) {
+      return this.onboardingService.provisionSystemAccess(employeeId);
     }
 }

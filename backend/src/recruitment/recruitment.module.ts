@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { RecruitmentController } from './recruitment.controller';
 import { RecruitmentService } from './recruitment.service';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -18,18 +19,27 @@ import { Onboarding,OnboardingSchema } from './models/onboarding.schema';
 
 import { EmployeeProfileModule } from '../employee-profile/employee-profile.module';
 import { OrganizationStructureModule } from '../organization-structure/organization-structure.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { PayrollExecutionModule } from '../payroll-execution/payroll-execution.module';
 import {
   EmployeeProfileServiceAdapter,
   OrganizationStructureServiceAdapter,
 } from './services/adapter-services';
-import { StubOnboardingService } from './services/stub-services';
+import { OnboardingService } from './services/onboarding.service';
+import { OnboardingSchedulerService } from './services/onboarding-scheduler.service';
+import { OffboardingService } from './services/offboarding.service';
+import { StubTimeManagementService } from './services/stub-services';
+import { Candidate, CandidateSchema } from '../employee-profile/models/candidate.schema';
+import { PerformanceModule } from '../performance/performance.module';
+import { LeavesModule } from '../leaves/leaves.module';
 
 /**
- * RecruitmentModule - Integrated with EmployeeProfile and OrganizationStructure subsystems.
- * OnboardingModule not available - using stub service.
+ * RecruitmentModule - Integrated with EmployeeProfile, OrganizationStructure, and Onboarding services.
+ * All services are now using real implementations (no stubs).
  */
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     MongooseModule.forFeature([
       { name: JobTemplate.name, schema: JobTemplateSchema },
       { name: JobRequisition.name, schema: JobRequisitionSchema },
@@ -44,9 +54,14 @@ import { StubOnboardingService } from './services/stub-services';
       { name: TerminationRequest.name, schema: TerminationRequestSchema },
       { name: ClearanceChecklist.name, schema: ClearanceChecklistSchema },
       { name: Onboarding.name, schema: OnboardingSchema },
+      { name: Candidate.name, schema: CandidateSchema },
     ]),
     EmployeeProfileModule,
     OrganizationStructureModule,
+    NotificationsModule,
+    PerformanceModule,
+    LeavesModule,
+    forwardRef(() => PayrollExecutionModule),
   ],
   controllers: [RecruitmentController],
   providers: [
@@ -61,11 +76,18 @@ import { StubOnboardingService } from './services/stub-services';
       provide: 'IOrganizationStructureService',
       useClass: OrganizationStructureServiceAdapter,
     },
+    OnboardingService,
+    OnboardingSchedulerService,
+    OffboardingService,
     {
       provide: 'IOnboardingService',
-      useClass: StubOnboardingService,
+      useClass: OnboardingService,
+    },
+    {
+      provide: 'ITimeManagementService',
+      useClass: StubTimeManagementService, // ⚠️ Stub until Time Management module implements calendar methods
     },
   ],
-  exports: [RecruitmentService],
+  exports: [RecruitmentService, OnboardingService],
 })
 export class RecruitmentModule {}

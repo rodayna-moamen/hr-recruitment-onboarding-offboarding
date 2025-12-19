@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { fetchApplications, fetchApplicationById, updateApplicationStatus, rejectApplication } from '../../../services/recruitment';
 import { Application, ApplicationStatus } from '../../../types/recruitment';
-import { ApplicationsTable } from '../../../components/recruitment/ApplicationsTable';
-import { ApplicationDetailDrawer } from '../../../components/recruitment/ApplicationDetailDrawer';
+import { ApplicationsTable } from './_components/ApplicationsTable';
+import { ApplicationDetailDrawer } from './_components/ApplicationDetailDrawer';
 
 const Applications: React.FC = () => {
   const [apps, setApps] = useState<Application[]>([]);
@@ -17,17 +18,27 @@ const Applications: React.FC = () => {
   const [drawerError, setDrawerError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetchApplications({
-      stage: filterStage as any,
-      status: filterStatus as any,
-    })
-      .then(res => {
+    const loadApplications = async () => {
+      setLoading(true);
+      try {
+        const res = await fetchApplications({
+          stage: filterStage as any,
+          status: filterStatus as any,
+        });
         setApps(res.data);
         setError(null);
-      })
-      .catch(() => setError('Failed to fetch applications'))
-      .finally(() => setLoading(false));
+      } catch (err: any) {
+        if (err?.code === 'ERR_NETWORK' || err?.code === 'ERR_CONNECTION_REFUSED') {
+          setError('Cannot connect to server. Please ensure the backend is running.');
+        } else {
+          setError(err?.response?.data?.message || 'Failed to fetch applications');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadApplications();
   }, [filterStage, filterStatus]);
 
   const handleView = async (app: Application) => {
@@ -58,7 +69,8 @@ const Applications: React.FC = () => {
 
   const handleReject = async () => {
     if (!drawerApp) return;
-    await rejectApplication(drawerApp._id);
+    // The rejection is now handled in ApplicationDetailDrawer with template
+    // This function is called after successful rejection
     setDrawerApp(a => a ? { ...a, status: 'rejected' as ApplicationStatus } : a);
     setApps(apps => apps.map(a => a._id === drawerApp._id ? { ...a, status: 'rejected' as ApplicationStatus } : a));
   };
@@ -71,6 +83,12 @@ const Applications: React.FC = () => {
             <h1 className="text-3xl font-bold">Applications Pipeline</h1>
             <p className="text-xs text-blue-300/80 uppercase tracking-widest">Recruitment - Internal HR</p>
           </div>
+          <Link
+            href="/subsystems/recruitment"
+            className="text-blue-300 hover:text-blue-200 underline text-sm"
+          >
+            ← Back
+          </Link>
         </div>
         <ApplicationsTable
           apps={apps}

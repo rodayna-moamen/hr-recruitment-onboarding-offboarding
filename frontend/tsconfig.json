@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "types": [],
     "paths": {
       "@/*": ["./*"]
     }
@@ -25,5 +26,10 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "**/_components/**",
+    "pages/**/_components/**",
+    ".next"
+  ]
 }

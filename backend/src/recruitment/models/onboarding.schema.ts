@@ -24,6 +24,23 @@ export class Onboarding {
       completedAt: Date,
       documentId: { type: Types.ObjectId, ref: 'Document' },
       notes: String,
+      equipmentReserved: {
+        type: Boolean,
+        default: false,
+      },
+      equipmentDetails: {
+        deskNumber: String,
+        accessCardNumber: String,
+        equipmentItems: [String], // e.g., ['laptop', 'monitor', 'keyboard']
+      },
+      provisioningRequired: {
+        type: Boolean,
+        default: false,
+      },
+      systemAdminTask: {
+        type: Boolean,
+        default: false,
+      },
     }
   ])
   tasks: any[];

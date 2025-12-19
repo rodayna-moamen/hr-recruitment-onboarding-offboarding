@@ -1,4 +1,4 @@
-import { JobRequisition } from '../../types/recruitment';
+import { JobRequisition } from '../../../../types/recruitment';
 import React from 'react';
 
 export interface JobsTableProps {
@@ -62,3 +62,6 @@ export const JobsTable: React.FC<JobsTableProps> = ({ jobs, loading, error, onEd
     </div>
   );
 };
+
+// No default export - this is a component, not a page
+

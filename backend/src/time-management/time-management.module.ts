@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TimeManagementController } from './time-management.controller';
 import { TimeManagementService } from './time-management.service';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -64,20 +63,8 @@ import { PayrollController } from './payroll/controllers/payroll.controller';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(), // Load .env file
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const mongoUri = configService.get<string>('MONGO_URI') || 'mongodb://localhost:27017';
-        return {
-          uri: mongoUri.trim(), // Remove any spaces, keep URI as-is
-          dbName: 'hr_system', // Specify database name separately
-          useNewUrlParser: true,
-          useUnifiedTopology: true,
-        };
-      },
-    }), // MongoDB connection using MONGO_URI from .env, connecting to hr-system database
+    // NOTE: MongooseModule.forRoot() is already configured in AppModule
+    // We only need forFeature() here to register schemas
     ScheduleModule.forRoot(), // Enable scheduled tasks for Phase 1 shift expiry notifications
     MongooseModule.forFeature([
       // Phase 1 - Shift Configuration & Assignment
