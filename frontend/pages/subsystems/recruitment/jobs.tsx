@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchJobRequisitions, fetchJobTemplates, createJobRequisition, updateJobRequisition, publishJobRequisition } from '../../../services/recruitment';
 import { JobRequisition, JobTemplate } from '../../../types/recruitment';
-import { JobsTable } from './_components/JobsTable';
-import { JobForm, JobFormValues } from './_components/JobForm';
+import { JobsTable } from '../../../components/recruitment/JobsTable';
+import { JobForm, JobFormValues } from '../../../components/recruitment/JobForm';
 
 const Jobs: React.FC = () => {
   const [jobs, setJobs] = useState<JobRequisition[]>([]);
