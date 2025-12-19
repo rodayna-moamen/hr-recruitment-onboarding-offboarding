@@ -880,7 +880,7 @@ export class RecruitmentService {
         .find()
         .populate({
           path: 'referringEmployeeId',
-          select: '_id name email', // Select specific fields if User model exists
+          select: '_id firstName lastName personalEmail workEmail employeeNumber', // Select EmployeeProfile fields
           strictPopulate: false, // Allow populate to not fail if path is not found
         })
         .populate({
@@ -917,7 +917,7 @@ export class RecruitmentService {
         .find({ candidateId: new Types.ObjectId(candidateId) })
         .populate({
           path: 'referringEmployeeId',
-          select: '_id name email', // Select specific fields if User model exists
+          select: '_id firstName lastName personalEmail workEmail employeeNumber', // Select EmployeeProfile fields
           strictPopulate: false, // Allow populate to not fail if path is not found
         })
         .populate({

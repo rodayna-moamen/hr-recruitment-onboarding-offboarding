@@ -30,6 +30,7 @@ import { OnboardingSchedulerService } from './services/onboarding-scheduler.serv
 import { OffboardingService } from './services/offboarding.service';
 import { StubTimeManagementService } from './services/stub-services';
 import { Candidate, CandidateSchema } from '../employee-profile/models/candidate.schema';
+import { EmployeeProfile, EmployeeProfileSchema } from '../employee-profile/models/employee-profile.schema';
 import { PerformanceModule } from '../performance/performance.module';
 import { LeavesModule } from '../leaves/leaves.module';
 
@@ -55,6 +56,8 @@ import { LeavesModule } from '../leaves/leaves.module';
       { name: ClearanceChecklist.name, schema: ClearanceChecklistSchema },
       { name: Onboarding.name, schema: OnboardingSchema },
       { name: Candidate.name, schema: CandidateSchema },
+      // Register EmployeeProfile as 'User' to match schema references
+      { name: 'User', schema: EmployeeProfileSchema },
     ]),
     EmployeeProfileModule,
     OrganizationStructureModule,
